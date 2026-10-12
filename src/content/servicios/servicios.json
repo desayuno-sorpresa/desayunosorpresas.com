@@ -1,34 +1,22 @@
 [
   {
-    "id": "ejemplo-fotografia",
-    "title": "Servicio de ejemplo: fotografía de producto",
-    "summary": "Contenido de ejemplo. Se reemplazará por los servicios reales desde Google Sheets.",
+    "id": "creacion-de-pagina-web",
+    "title": "Creación de página web",
+    "summary": "Una página web lista para mostrar tus servicios y lograr clientes.",
     "description": [
-      "Este es un servicio de ejemplo para comprobar el diseño y las rutas del sitio.",
-      "Los servicios reales se cargarán desde la hoja de cálculo de Google con sus fotos de Google Drive."
+      "Una página rápida y fácil de encontrar, y servicios que puedes actualizar tú mismo desde una hoja de cálculo."
     ],
-    "benefits": ["Beneficio de ejemplo 1", "Beneficio de ejemplo 2"],
-    "order": 1,
-    "status": "borrador",
-    "ctaLabel": "Quiero este servicio",
-    "cover": "./ejemplo-fotografia/01-portada.webp",
-    "coverAlt": "Imagen de ejemplo con fondo amarillo",
-    "gallery": [
-      { "src": "./ejemplo-fotografia/02-detalle.webp", "alt": "Imagen de ejemplo con fondo rosado" }
-    ],
-    "updatedAt": "2026-10-12"
-  },
-  {
-    "id": "ejemplo-catalogo",
-    "title": "Servicio de ejemplo: catálogo digital",
-    "summary": "Contenido de ejemplo. Se reemplazará por los servicios reales desde Google Sheets.",
-    "description": ["Segundo servicio de ejemplo para comprobar el listado."],
     "benefits": [],
     "order": 2,
-    "status": "borrador",
-    "cover": "./ejemplo-catalogo/01-portada.webp",
-    "coverAlt": "Imagen de ejemplo con fondo verde",
-    "gallery": [],
+    "status": "publicado",
+    "cover": "./creacion-de-pagina-web/01.webp",
+    "coverAlt": "Anuncio de Desayunos Sorpresa con cajas de desayuno para hombre, mujer, niño y adultos mayores, y la página web vista en un portátil y un celular.",
+    "gallery": [
+      {
+        "src": "./creacion-de-pagina-web/02.webp",
+        "alt": "Anuncio de Desayunos Sorpresa con cajas de desayuno, y la página web vista en un portátil y un celular."
+      }
+    ],
     "updatedAt": "2026-10-12"
   }
 ]
