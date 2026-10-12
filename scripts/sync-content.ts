@@ -190,17 +190,21 @@ async function main(): Promise<void> {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main().catch(async (error: unknown) => {
-    if (error instanceof SyncError) {
-      console.error(`${error.message} Corrígelos en Google Sheets:`);
-      for (const problem of error.problems) console.error(`  - ${problem}`);
-      // En GitHub Actions, la lista aparece también en el resumen de la ejecución.
-      const summary = process.env['GITHUB_STEP_SUMMARY'];
-      if (summary) {
-        const list = error.problems.map((problem) => `- ${problem}`).join('\n');
-        await appendFile(summary, `### ${error.message} Corrígelos en Google Sheets\n\n${list}\n`);
-      }
-    } else {
-      console.error(error instanceof Error ? error.message : error);
+    const problems =
+      error instanceof SyncError
+        ? error.problems
+        : [error instanceof Error ? error.message : String(error)];
+    const title =
+      error instanceof SyncError
+        ? `${error.message} Corrígelos en Google Sheets:`
+        : 'No se pudo sincronizar:';
+    console.error(title);
+    for (const problem of problems) console.error(`  - ${problem}`);
+
+    // En GitHub Actions la lista va al resumen de la ejecución y al issue de revisión.
+    const markdown = `### ${title}\n\n${problems.map((problem) => `- ${problem}`).join('\n')}\n`;
+    for (const file of [process.env['GITHUB_STEP_SUMMARY'], process.env['SYNC_PROBLEMS_FILE']]) {
+      if (file) await appendFile(file, markdown);
     }
     process.exit(1);
   });
