@@ -16,7 +16,8 @@
     "typecheck": "astro check",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "check:release": "node scripts/check-release.ts"
+    "check:release": "node scripts/check-release.ts",
+    "sync:content": "node scripts/sync-content.ts"
   },
   "dependencies": {
     "@astrojs/sitemap": "3.7.4",

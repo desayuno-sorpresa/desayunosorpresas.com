@@ -7,7 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Propósito: web corporativa que ofrece servicios a pymes de desayunos sorpresa. Páginas: inicio (dos grupos de WhatsApp + formulario de solicitud), servicios (listado y detalle), condiciones, privacidad, 404. Futuro: casos de éxito.
 - Idioma: español de Colombia (`es-CO`). Un solo idioma, sin `hreflang`.
 - Stack: Astro 7 (estático), TypeScript 6, pnpm 12.7.0 (`packageManager`), Node 22 (`.nvmrc`, `engines`).
-- Contenido de servicios: `src/content/servicios/servicios.json` + imágenes en la misma carpeta (colección `file()` con esquema Zod). Fase 2: lo generará un sync desde Google Sheets (pestañas `Servicios` y `Fotos`, fotos como enlaces de Drive) que abre un PR; el build nunca accede a la red.
+- Contenido de servicios: `src/content/servicios/servicios.json` + imágenes WebP por servicio (colección `file()` con esquema Zod). **No editar a mano**: lo genera `pnpm sync:content` desde la hoja de Google Sheets `1fhydjA3oUvsC8hRt0gOLEO5O9z_2mkQXUnNaABVQkjE` (pestañas `Servicios` y `Fotos`; fotos como enlaces de Drive). Solo se sincronizan filas en estado "Publicado" (el repo es público).
+- Sync: workflow `sync-content.yml` (diario 6:00 Colombia y manual) → valida con `build` → abre/actualiza el PR `sync/contenido`; publicar = hacer merge. Credencial en el secreto `GOOGLE_SERVICE_ACCOUNT_JSON` (cuenta de servicio de solo lectura). La lógica pura está en `src/lib/content-sync/`; la red y el disco en `scripts/`.
 - Formulario de ingreso: arma un mensaje y abre `wa.me/<número>`; la aprobación es manual y los enlaces de invitación de los grupos **no** se publican en el sitio.
 - Dominio: `https://desayunosorpresas.com` (dominio propio en GitHub Pages) → `site` fijo en `astro.config.mjs`, `base: '/'`. `BASE_PATH` solo se usa en local para detectar rutas absolutas escritas a mano (p. ej. `BASE_PATH=/prueba`).
 - Contacto: WhatsApp del administrador `+57 312 506 5058` y correo `desayunos.sorpresa.col@gmail.com` (en `src/config/site.ts`).
@@ -27,6 +28,7 @@ Si una tarea depende de alguno de los datos pendientes, pregunta en lugar de sup
 - `pnpm test` (Vitest) y `pnpm test -- <ruta|patrón>` para una sola prueba.
 - `pnpm test:e2e` (Playwright + axe; compila con `SHOW_DRAFTS=true` y sirve en el puerto 4321). Primera vez: `pnpm exec playwright install chromium`.
 - `pnpm check:release`: falla mientras haya datos pendientes o textos provisionales.
+- `pnpm sync:content`: descarga servicios y fotos (requiere `GOOGLE_SERVICE_ACCOUNT_JSON` y `SPREADSHEET_ID`; normalmente solo se ejecuta en Actions).
 
 Instala dependencias solo con lockfile (`pnpm install --frozen-lockfile`). No añadas dependencias sin que la tarea lo requiera y sin justificarlo.
 

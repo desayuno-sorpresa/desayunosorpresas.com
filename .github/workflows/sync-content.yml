@@ -1,0 +1,80 @@
+name: Sincronizar servicios desde Google Sheets
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 11 * * *' # 6:00 a. m. hora de Colombia
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-content
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Descargar, validar y abrir PR
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      SPREADSHEET_ID: 1fhydjA3oUvsC8hRt0gOLEO5O9z_2mkQXUnNaABVQkjE
+      BRANCH: sync/contenido
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Descargar servicios y fotos
+        run: pnpm sync:content
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+
+      - name: Detectar cambios
+        id: diff
+        run: |
+          if [ -z "$(git status --porcelain -- src/content/servicios)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Sin cambios en Google Sheets." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Valida esquema, imágenes y tipos antes de proponer el cambio.
+      - if: steps.diff.outputs.changed == 'true'
+        run: pnpm build
+
+      - name: Abrir o actualizar el PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$BRANCH"
+          git add -A src/content/servicios
+          git commit -m "Actualizar servicios desde Google Sheets"
+          git push --force origin "$BRANCH"
+          {
+            echo "Cambios descargados de Google Sheets el $(TZ=America/Bogota date '+%Y-%m-%d %H:%M')."
+            echo
+            echo "Revisa la vista previa de los datos y haz **merge** para publicarlos en el sitio."
+            echo
+            echo '```'
+            git diff --stat HEAD~1 HEAD
+            echo '```'
+          } > pr-body.md
+          if [ "$(gh pr view "$BRANCH" --json state --jq .state 2>/dev/null)" = "OPEN" ]; then
+            gh pr edit "$BRANCH" --body-file pr-body.md
+            echo "PR actualizado: $(gh pr view "$BRANCH" --json url --jq .url)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh pr create --base main --head "$BRANCH" \
+              --title "Actualizar servicios desde Google Sheets" --body-file pr-body.md
+            echo "PR creado: $(gh pr view "$BRANCH" --json url --jq .url)" >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -4,7 +4,6 @@ import { expect, test } from '@playwright/test';
 const PAGES = [
   { path: './', h1: 'Servicios y comunidad para negocios de desayunos sorpresa' },
   { path: 'servicios/', h1: 'Servicios para tu negocio' },
-  { path: 'servicios/ejemplo-fotografia/', h1: 'Servicio de ejemplo: fotografía de producto' },
   { path: 'condiciones/', h1: 'Condiciones de los grupos' },
   { path: 'privacidad/', h1: 'Tratamiento de datos personales' },
 ] as const;
@@ -35,6 +34,19 @@ for (const { path, h1 } of PAGES) {
     });
   });
 }
+
+test('cada servicio listado tiene página de detalle accesible', async ({ page }) => {
+  await page.goto('servicios/');
+  const links = page.locator('.service-card h2 a');
+  test.skip((await links.count()) === 0, 'No hay servicios publicados.');
+  const title = (await links.first().textContent())?.trim() ?? '';
+  await links.first().click();
+  await expect(page.locator('h1')).toHaveText(title);
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
+});
 
 test('todos los enlaces internos responden', async ({ page, request }) => {
   const visited = new Set<string>();
