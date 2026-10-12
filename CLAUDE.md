@@ -87,6 +87,8 @@ Instala dependencias solo con lockfile (`pnpm install --frozen-lockfile`). No a�
 
 ## CI/CD
 
+
+- Implementación actual: `verify.yml` (reutilizable: lint, formato, tipos, test, e2e) usado por `ci.yml` (PRs, solo lectura, ignora PRs que solo tocan `src/content/**`) y por `deploy.yml` (push a `main` o `workflow_dispatch` → verify → `check:release` → build → Pages). `sync-content.yml` lanza `deploy.yml` tras su merge automático porque un merge con `GITHUB_TOKEN` no dispara `push`. No poner jobs con permisos de escritura en workflows que se disparen por `pull_request`: los PR del bot fallarían al arrancar.
 - Workflow de GitHub Actions: checkout → setup Node (versión fijada, caché) → instalación con lockfile → lint → typecheck → test → build → `actions/upload-pages-artifact` → `actions/deploy-pages`.
 - Builds reproducibles: lockfile commiteado, versiones fijadas, sin dependencias de red en build salvo las del instalador.
 
