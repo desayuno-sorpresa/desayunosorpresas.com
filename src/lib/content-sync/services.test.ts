@@ -85,7 +85,7 @@ describe('parseServices', () => {
       [row(SERVICE_HEADERS), row(draft)],
       [row(PHOTO_HEADERS), row(['Fotografía de producto', ID_B, 'Una foto de ejemplo', ''])],
     );
-    expect(result).toEqual({ services: [], errors: [] });
+    expect(result).toEqual({ services: [], errors: [], rows: 1, drafts: 1 });
   });
 
   it('reporta errores con fila y columna', () => {

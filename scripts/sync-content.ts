@@ -25,6 +25,8 @@ export interface SyncOptions {
 }
 
 export interface SyncReport {
+  rows: number;
+  drafts: number;
   services: number;
   images: number;
   changed: boolean;
@@ -79,7 +81,7 @@ function sameBytes(a: Uint8Array | null, b: Uint8Array): boolean {
 
 export async function runSync(source: ContentSource, options: SyncOptions): Promise<SyncReport> {
   const sheets = await source.readSheets([SERVICES_SHEET, PHOTOS_SHEET]);
-  const { services, errors } = parseServices(
+  const { services, errors, rows, drafts } = parseServices(
     sheets.get(SERVICES_SHEET) ?? [],
     sheets.get(PHOTOS_SHEET) ?? [],
   );
@@ -158,7 +160,7 @@ export async function runSync(source: ContentSource, options: SyncOptions): Prom
     changed = true;
   }
 
-  return { services: entries.length, images: imageCount, changed };
+  return { rows, drafts, services: entries.length, images: imageCount, changed };
 }
 
 function todayInBogota(): string {
@@ -177,10 +179,13 @@ async function main(): Promise<void> {
     outDir: DEFAULT_OUT_DIR,
     today: todayInBogota(),
   });
-  console.log(
-    `${report.services} servicio(s) publicado(s), ${report.images} foto(s). ` +
-      (report.changed ? 'Hay cambios.' : 'Sin cambios.'),
-  );
+  const message =
+    `Filas leídas en "Servicios": ${report.rows} (${report.drafts} en borrador). ` +
+    `Publicados: ${report.services}, fotos: ${report.images}. ` +
+    (report.changed ? 'Hay cambios.' : 'Sin cambios.');
+  console.log(message);
+  const summary = process.env['GITHUB_STEP_SUMMARY'];
+  if (summary) await appendFile(summary, `${message}\n\n`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -80,7 +80,7 @@ describe('runSync', () => {
     ]);
 
     const first = await runSync(fakeSource(sheets, files), { outDir, today: '2026-10-12' });
-    expect(first).toEqual({ services: 1, images: 2, changed: true });
+    expect(first).toEqual({ rows: 1, drafts: 0, services: 1, images: 2, changed: true });
 
     const json = JSON.parse(await readFile(path.join(outDir, 'servicios.json'), 'utf8'));
     expect(json).toEqual([
@@ -110,7 +110,7 @@ describe('runSync', () => {
       ['Fotos', photosGrid],
     ]);
     const report = await runSync(fakeSource(sheets, {}), { outDir, today: '2026-10-12' });
-    expect(report).toEqual({ services: 0, images: 0, changed: true });
+    expect(report).toEqual({ rows: 1, drafts: 1, services: 0, images: 0, changed: true });
     expect(await readdir(outDir)).toEqual(['servicios.json']);
   });
 

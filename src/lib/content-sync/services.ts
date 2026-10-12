@@ -38,6 +38,9 @@ export interface ServiceDraft {
 export interface ParseResult {
   services: ServiceDraft[];
   errors: string[];
+  /** Filas con datos en la pestaña Servicios y cuántas están en borrador (para diagnóstico). */
+  rows: number;
+  drafts: number;
 }
 
 function driveId(cell: SheetCell): string | null {
@@ -185,5 +188,10 @@ export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): P
     bySlug.get(photo.slug)?.gallery.push(photo.ref);
   }
 
-  return { services: services.toSorted((a, b) => a.order - b.order), errors };
+  return {
+    services: services.toSorted((a, b) => a.order - b.order),
+    errors,
+    rows: servicesTable.records.length,
+    drafts: draftSlugs.size,
+  };
 }
