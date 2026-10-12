@@ -102,6 +102,24 @@ export async function runSync(source: ContentSource, options: SyncOptions): Prom
       }
     }
     rendered.set(service.slug, images);
+
+    // La misma foto subida dos veces a Drive (enlaces distintos, imagen idéntica).
+    const names = [
+      'la portada',
+      ...service.gallery.map((_, index) => `la foto ${index + 1} de la galería`),
+    ];
+    // Solo si todas se descargaron; si no, los índices no corresponden a las filas.
+    if (images.length !== 1 + service.gallery.length) continue;
+    images.forEach((image, index) => {
+      const twin = images.findIndex(
+        (other, otherIndex) => otherIndex < index && sameBytes(other, image),
+      );
+      if (twin !== -1) {
+        imageProblems.push(
+          `Servicio "${service.title}": ${names[index]} es idéntica a ${names[twin]}; usa otra foto.`,
+        );
+      }
+    });
   }
   if (imageProblems.length > 0) throw new SyncError(imageProblems);
 

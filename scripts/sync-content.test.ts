@@ -132,6 +132,23 @@ describe('runSync', () => {
     expect(await readdir(outDir)).toEqual(['servicios.json']);
   });
 
+  it('detecta la misma foto subida dos veces con enlaces distintos', async () => {
+    const bytes = await jpeg('#f4c27a', 800);
+    const sheets = new Map<string, SheetGrid>([
+      ['Servicios', servicesGrid()],
+      ['Fotos', photosGrid],
+    ]);
+    const source = fakeSource(sheets, {
+      [COVER]: { name: 'portada.jpg', mimeType: 'image/jpeg', bytes },
+      [PHOTO]: { name: 'copia.jpg', mimeType: 'image/jpeg', bytes },
+    });
+    const error = await runSync(source, { outDir, today: '2026-10-12' }).catch((e: unknown) => e);
+    expect((error as SyncError).problems).toEqual([
+      'Servicio "Fotografía de producto": la foto 1 de la galería es idéntica a la portada; usa otra foto.',
+    ]);
+    expect(await readdir(outDir)).toEqual([]);
+  });
+
   it('reporta pestañas faltantes', async () => {
     const source = fakeSource(new Map([['Servicios', servicesGrid()]]), {});
     const error = await runSync(source, { outDir, today: '2026-10-12' }).catch((e: unknown) => e);

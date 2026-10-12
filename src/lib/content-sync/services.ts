@@ -1,3 +1,4 @@
+import { reviewAltTexts, reviewTexts } from './content-review.ts';
 import { extractDriveFileId } from './drive.ts';
 import { SERVICE_LIMITS, SLUG_PATTERN } from './limits.ts';
 import { readTable, type SheetCell, type SheetGrid } from './sheet.ts';
@@ -129,6 +130,16 @@ export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): P
     if (coverAlt.length < altMin) {
       rowErrors.push(`"Descripción portada" debe describir la foto (mínimo ${altMin} caracteres).`);
     }
+    rowErrors.push(
+      ...reviewTexts([
+        { label: 'Título', value: title },
+        { label: 'Resumen', value: summary },
+        { label: 'Descripción', value: description.join('\n') },
+        { label: 'Beneficios', value: benefits.join('\n') },
+        { label: 'Texto botón', value: ctaLabel },
+        { label: 'Descripción portada', value: coverAlt },
+      ]),
+    );
 
     if (rowErrors.length > 0 || coverId === null || order === null || price === null) {
       errors.push(...rowErrors.map((message) => `${at}: ${message}`));
@@ -152,7 +163,7 @@ export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): P
 
   const bySlug = new Map(services.map((service) => [service.slug, service]));
   const titleToSlug = new Map(services.map((service) => [slugify(service.title), service.slug]));
-  const photos: { slug: string; order: number; ref: DriveImageRef }[] = [];
+  const photos: { slug: string; row: number; order: number; ref: DriveImageRef }[] = [];
 
   for (const record of photosTable.records) {
     const at = `Fotos, fila ${record.row}`;
@@ -177,15 +188,46 @@ export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): P
       );
     }
     if (order === null) rowErrors.push('"Orden" debe ser un número entero.');
+    rowErrors.push(...reviewTexts([{ label: 'Descripción foto', value: alt }]));
     if (rowErrors.length > 0 || fileId === null || order === null) {
       errors.push(...rowErrors.map((message) => `${at}: ${message}`));
       continue;
     }
-    photos.push({ slug, order, ref: { fileId, alt } });
+    photos.push({ slug, row: record.row, order, ref: { fileId, alt } });
   }
 
+  const photoRows = new Map<DriveImageRef, number>();
   for (const photo of photos.toSorted((a, b) => a.order - b.order)) {
     bySlug.get(photo.slug)?.gallery.push(photo.ref);
+    photoRows.set(photo.ref, photo.row);
+  }
+
+  // Revisión de las fotos de cada servicio en conjunto: repetidas y descripciones.
+  for (const service of services) {
+    const at = `Servicios, fila ${rowBySlug.get(service.slug)}`;
+    const labelled = [
+      { label: 'Descripción portada', ref: service.cover },
+      ...service.gallery.map((ref) => ({
+        label: `Descripción foto (Fotos, fila ${photoRows.get(ref)})`,
+        ref,
+      })),
+    ];
+    const firstUse = new Map<string, string>();
+    for (const { label, ref } of labelled) {
+      const where = label.replace('Descripción ', '');
+      const previous = firstUse.get(ref.fileId);
+      if (previous) {
+        errors.push(`${at}: la ${where} es la misma imagen que la ${previous}; usa otra foto.`);
+      } else {
+        firstUse.set(ref.fileId, where);
+      }
+    }
+    const altProblems = reviewAltTexts(
+      labelled.map(({ label, ref }) => ({ label, alt: ref.alt })),
+      service.title,
+      service.summary,
+    );
+    errors.push(...altProblems.map((message) => `${at}: ${message}`));
   }
 
   return {

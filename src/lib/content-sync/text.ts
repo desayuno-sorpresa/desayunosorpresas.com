@@ -40,6 +40,7 @@ export function parsePrice(text: string): number | undefined | null {
   return Number.isSafeInteger(amount) && amount > 0 ? amount : null;
 }
 
-function stripAccents(text: string): string {
-  return text.normalize('NFD').replace(/[̀-ͯ]/g, '');
+/** Quita tildes y diacríticos: "Fotografía" → "Fotografia". */
+export function stripAccents(text: string): string {
+  return text.normalize('NFD').replace(/\p{M}/gu, '');
 }

@@ -120,6 +120,48 @@ describe('parseServices', () => {
     ]);
   });
 
+  it('incluye la revisión de contenido con fila y columna', () => {
+    const promising = [...validService];
+    promising[3] = 'Visibilidad mayor en google.';
+    const result = parseServices([row(SERVICE_HEADERS), row(promising)], [row(PHOTO_HEADERS)]);
+    expect(result.services).toEqual([]);
+    expect(result.errors).toEqual([
+      'Servicios, fila 2: "Descripción" promete resultados en Google o buscadores; no se pueden asegurar.',
+      'Servicios, fila 2: "Descripción" escribe la marca como "Google".',
+    ]);
+  });
+
+  it('detecta la misma foto usada como portada y en la galería', () => {
+    const result = parseServices(
+      [row(SERVICE_HEADERS), row(validService)],
+      [
+        row(PHOTO_HEADERS),
+        row(['Fotografía de producto', link(ID_A), 'Otra vista del desayuno', '']),
+      ],
+    );
+    expect(result.errors).toEqual([
+      'Servicios, fila 2: la foto (Fotos, fila 2) es la misma imagen que la portada; usa otra foto.',
+    ]);
+  });
+
+  it('detecta descripciones de foto que repiten el resumen', () => {
+    const result = parseServices(
+      [row(SERVICE_HEADERS), row(validService)],
+      [
+        row(PHOTO_HEADERS),
+        row([
+          'Fotografía de producto',
+          ID_B,
+          'Fotos profesionales de tus desayunos para redes sociales.',
+          '',
+        ]),
+      ],
+    );
+    expect(result.errors).toEqual([
+      'Servicios, fila 2: "Descripción foto (Fotos, fila 2)" repite el resumen; describe lo que se ve en la foto.',
+    ]);
+  });
+
   it('informa columnas faltantes', () => {
     const result = parseServices([row(['Título'])], [row(PHOTO_HEADERS)]);
     expect(result.errors[0]).toMatch(/faltan las columnas "resumen"/);
