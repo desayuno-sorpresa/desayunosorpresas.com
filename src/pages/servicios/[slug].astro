@@ -1,0 +1,155 @@
+---
+import type { GetStaticPaths } from 'astro';
+import { Image } from 'astro:assets';
+import { getCollection, type CollectionEntry } from 'astro:content';
+import ServiceGallery from '@/components/ServiceGallery.astro';
+import { includeDrafts } from '@/config/build';
+import { siteConfig } from '@/config/site';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { visibleItems } from '@/lib/publishing';
+import { buildServiceInquiryMessage, formatCop } from '@/lib/service-inquiry';
+import { withBase } from '@/lib/url';
+import { buildWaMeUrl } from '@/lib/whatsapp';
+
+export const getStaticPaths = (async () => {
+  const services = visibleItems(
+    (await getCollection('servicios')).map((entry) => ({ id: entry.id, ...entry.data })),
+    includeDrafts,
+  );
+  return services.map((service) => ({ params: { slug: service.id }, props: { service } }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+  service: CollectionEntry<'servicios'>['data'] & { id: string };
+}
+
+const { service } = Astro.props;
+const inquiryHref =
+  siteConfig.adminWhatsApp === null
+    ? null
+    : buildWaMeUrl(siteConfig.adminWhatsApp, buildServiceInquiryMessage(service.title));
+const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Service',
+  name: service.title,
+  description: service.summary,
+  ...(canonical ? { url: canonical } : {}),
+  ...(siteConfig.brandName
+    ? { provider: { '@type': 'Organization', name: siteConfig.brandName } }
+    : {}),
+  ...(service.priceFrom
+    ? {
+        offers: {
+          '@type': 'Offer',
+          priceCurrency: 'COP',
+          priceSpecification: {
+            '@type': 'PriceSpecification',
+            minPrice: service.priceFrom,
+            priceCurrency: 'COP',
+          },
+        },
+      }
+    : {}),
+};
+---
+
+<BaseLayout
+  title={service.title}
+  description={service.summary}
+  noindex={includeDrafts || service.status === 'borrador'}
+  jsonLd={jsonLd}
+>
+  <article class="section container service">
+    <p>
+      <a href={withBase('servicios/')}>← Todos los servicios</a>
+    </p>
+    {service.status === 'borrador' && <p class="notice">Borrador: no visible en producción.</p>}
+    <h1>{service.title}</h1>
+    <p class="lead">{service.summary}</p>
+    <Image
+      class="service__cover"
+      src={service.cover}
+      alt={service.coverAlt}
+      widths={[480, 800, 1200]}
+      sizes="(min-width: 68rem) 66rem, 100vw"
+      loading="eager"
+      fetchpriority="high"
+    />
+    <div class="service__body">
+      {service.description.map((paragraph) => (
+        <p>{paragraph}</p>
+      ))}
+      {service.benefits.length > 0 && (
+        <>
+          <h2>Qué incluye</h2>
+          <ul>
+            {service.benefits.map((benefit) => (
+              <li>{benefit}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {service.priceFrom && (
+        <p class="service__price">
+          Desde <strong>{formatCop(service.priceFrom)}</strong>
+        </p>
+      )}
+      {inquiryHref ? (
+        <a
+          class="button button--whatsapp"
+          href={inquiryHref}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {service.ctaLabel ?? 'Consultar por WhatsApp'}
+          <span class="visually-hidden"> (se abre en una pestaña nueva)</span>
+        </a>
+      ) : (
+        <a class="button" href={withBase('#solicitud')}>
+          Solicitar ingreso al grupo de negocios
+        </a>
+      )}
+    </div>
+    {service.gallery.length > 0 && (
+      <section aria-labelledby="galeria" class="service__gallery">
+        <h2 id="galeria">Fotos</h2>
+        <ServiceGallery images={service.gallery} />
+      </section>
+    )}
+    <p class="service__updated">
+      Actualizado el{' '}
+      <time datetime={service.updatedAt.toISOString().slice(0, 10)}>
+        {service.updatedAt.toLocaleDateString('es-CO', { dateStyle: 'long', timeZone: 'UTC' })}
+      </time>
+    </p>
+  </article>
+</BaseLayout>
+
+<style>
+  .service__cover {
+    width: 100%;
+    max-height: 32rem;
+    object-fit: cover;
+    border-radius: var(--radius);
+    margin-block: var(--space-3);
+  }
+
+  .service__body {
+    max-width: 45rem;
+  }
+
+  .service__price {
+    font-size: 1.2rem;
+  }
+
+  .service__gallery {
+    margin-top: var(--space-4);
+  }
+
+  .service__updated {
+    margin-top: var(--space-3);
+    color: var(--color-muted);
+    font-size: 0.95rem;
+  }
+</style>

@@ -1,0 +1,369 @@
+---
+import type { GroupId } from '@/lib/join-request';
+
+interface Props {
+  groups: readonly { id: GroupId; title: string }[];
+  /** Número del administrador; `null` deja el formulario deshabilitado. */
+  adminWhatsApp: string | null;
+  conditionsHref: string;
+  privacyHref: string;
+}
+
+const { groups, adminWhatsApp, conditionsHref, privacyHref } = Astro.props;
+const enabled = adminWhatsApp !== null;
+---
+
+<form class="join-form" data-join-form data-phone={adminWhatsApp ?? ''} novalidate>
+  {!enabled && (
+    <p class="notice" role="note">
+      El formulario estará disponible muy pronto: falta configurar el número de WhatsApp del
+      administrador.
+    </p>
+  )}
+
+  <div class="join-form__summary" data-error-summary tabindex="-1" hidden>
+    <h3>Revisa estos datos:</h3>
+    <ul data-error-list></ul>
+  </div>
+
+  <fieldset disabled={!enabled}>
+    <legend class="visually-hidden">Datos de la solicitud</legend>
+
+    <fieldset class="join-form__group" aria-describedby="group-error">
+      <legend>
+        ¿A qué grupo quieres ingresar? <span aria-hidden="true">*</span>
+      </legend>
+      {groups.map((group) => (
+        <label class="join-form__choice">
+          <input type="radio" name="group" value={group.id} data-title={group.title} required />
+          {group.title}
+        </label>
+      ))}
+      <p class="join-form__error" id="group-error" data-error-for="group" hidden></p>
+    </fieldset>
+
+    <div class="join-form__field">
+      <label for="join-name">
+        Tu nombre <span aria-hidden="true">*</span>
+      </label>
+      <input
+        id="join-name"
+        name="name"
+        autocomplete="name"
+        maxlength="80"
+        required
+        aria-describedby="name-error"
+      />
+      <p class="join-form__error" id="name-error" data-error-for="name" hidden></p>
+    </div>
+
+    <div class="join-form__field">
+      <label for="join-business">Nombre del negocio</label>
+      <p class="join-form__hint" id="business-hint">
+        Obligatorio para el grupo privado de negocios.
+      </p>
+      <input
+        id="join-business"
+        name="business"
+        autocomplete="organization"
+        maxlength="80"
+        aria-describedby="business-hint business-error"
+      />
+      <p class="join-form__error" id="business-error" data-error-for="business" hidden></p>
+    </div>
+
+    <div class="join-form__field">
+      <label for="join-city">
+        Ciudad <span aria-hidden="true">*</span>
+      </label>
+      <input
+        id="join-city"
+        name="city"
+        autocomplete="address-level2"
+        maxlength="80"
+        required
+        aria-describedby="city-error"
+      />
+      <p class="join-form__error" id="city-error" data-error-for="city" hidden></p>
+    </div>
+
+    <div class="join-form__field">
+      <label for="join-social">Instagram, web o catálogo del negocio</label>
+      <p class="join-form__hint" id="social-hint">
+        Obligatorio para el grupo privado: lo usamos para verificar el negocio.
+      </p>
+      <input
+        id="join-social"
+        name="social"
+        maxlength="80"
+        aria-describedby="social-hint social-error"
+      />
+      <p class="join-form__error" id="social-error" data-error-for="social" hidden></p>
+    </div>
+
+    <div class="join-form__check">
+      <input
+        type="checkbox"
+        id="join-conditions"
+        name="acceptsConditions"
+        required
+        aria-describedby="conditions-error"
+      />
+      <label for="join-conditions">
+        Acepto las <a href={conditionsHref}>condiciones del grupo</a>
+        <span aria-hidden="true">*</span>
+      </label>
+      <p
+        class="join-form__error"
+        id="conditions-error"
+        data-error-for="acceptsConditions"
+        hidden
+      ></p>
+    </div>
+
+    <div class="join-form__check">
+      <input
+        type="checkbox"
+        id="join-privacy"
+        name="acceptsPrivacy"
+        required
+        aria-describedby="privacy-error"
+      />
+      <label for="join-privacy">
+        Autorizo el tratamiento de mis datos según la <a href={privacyHref}>política de datos</a>
+        <span aria-hidden="true">*</span>
+      </label>
+      <p class="join-form__error" id="privacy-error" data-error-for="acceptsPrivacy" hidden></p>
+    </div>
+
+    <p class="join-form__hint">
+      <span aria-hidden="true">*</span> Campo obligatorio.
+    </p>
+
+    <button class="button button--whatsapp" type="submit">
+      Enviar solicitud por WhatsApp
+    </button>
+    <p class="join-form__hint">
+      Se abrirá WhatsApp con tu mensaje listo para enviar. Un administrador revisará la solicitud y
+      te responderá por el mismo chat.
+    </p>
+  </fieldset>
+  <noscript>
+    <p class="notice">
+      Este formulario necesita JavaScript para preparar el mensaje de WhatsApp. Actívalo o
+      escríbenos directamente por WhatsApp.
+    </p>
+  </noscript>
+</form>
+
+<script>
+  import {
+    buildJoinRequestMessage,
+    parseJoinRequest,
+    type JoinRequestErrors,
+    type JoinRequestField,
+    type JoinRequestInput,
+  } from '@/lib/join-request';
+  import { buildWaMeUrl } from '@/lib/whatsapp';
+
+  const FIELDS: readonly JoinRequestField[] = [
+    'group',
+    'name',
+    'business',
+    'city',
+    'social',
+    'acceptsConditions',
+    'acceptsPrivacy',
+  ];
+
+  function readInput(form: HTMLFormElement): JoinRequestInput {
+    const data = new FormData(form);
+    const input: JoinRequestInput = {};
+    for (const field of FIELDS) {
+      const value = data.get(field);
+      if (typeof value === 'string') input[field] = value;
+    }
+    return input;
+  }
+
+  function firstControl(form: HTMLFormElement, field: JoinRequestField): HTMLInputElement | null {
+    return form.querySelector<HTMLInputElement>(`[name="${field}"]`);
+  }
+
+  function showErrors(form: HTMLFormElement, errors: JoinRequestErrors): void {
+    const summary = form.querySelector<HTMLElement>('[data-error-summary]');
+    const list = form.querySelector<HTMLUListElement>('[data-error-list]');
+    list?.replaceChildren();
+
+    for (const field of FIELDS) {
+      const message = errors[field];
+      const slot = form.querySelector<HTMLElement>(`[data-error-for="${field}"]`);
+      const controls = form.querySelectorAll<HTMLInputElement>(`[name="${field}"]`);
+      if (slot) {
+        slot.textContent = message ?? '';
+        slot.hidden = message === undefined;
+      }
+      controls.forEach((control) => {
+        if (message === undefined) control.removeAttribute('aria-invalid');
+        else control.setAttribute('aria-invalid', 'true');
+      });
+      const control = firstControl(form, field);
+      if (message !== undefined && list && control) {
+        const link = document.createElement('a');
+        link.href = `#${control.id || 'contenido'}`;
+        link.textContent = message;
+        link.addEventListener('click', (event) => {
+          event.preventDefault();
+          control.focus();
+        });
+        const item = document.createElement('li');
+        item.append(link);
+        list.append(item);
+      }
+    }
+
+    if (summary) {
+      summary.hidden = Object.keys(errors).length === 0;
+      if (!summary.hidden) summary.focus();
+    }
+  }
+
+  for (const form of document.querySelectorAll<HTMLFormElement>('[data-join-form]')) {
+    const phone = form.dataset['phone'] ?? '';
+    if (phone === '') continue;
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const result = parseJoinRequest(readInput(form));
+      if (!result.ok) {
+        showErrors(form, result.errors);
+        return;
+      }
+      showErrors(form, {});
+      const groupInput = form.querySelector<HTMLInputElement>(
+        `[name="group"][value="${result.value.group}"]`,
+      );
+      const groupTitle = groupInput?.dataset['title'] ?? result.value.group;
+      window.location.assign(
+        buildWaMeUrl(phone, buildJoinRequestMessage(result.value, groupTitle)),
+      );
+    });
+  }
+</script>
+
+<style>
+  .join-form {
+    max-width: 40rem;
+  }
+
+  .join-form > fieldset {
+    display: grid;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .join-form__group {
+    margin: 0;
+    padding: var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  .join-form__group legend {
+    font-weight: 600;
+    padding-inline: 0.25rem;
+  }
+
+  .join-form__choice {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 2.75rem;
+  }
+
+  .join-form__field {
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  .join-form__field label {
+    font-weight: 600;
+  }
+
+  .join-form input:not([type]),
+  .join-form input[type='text'] {
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-muted);
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+    color: var(--color-text);
+    font: inherit;
+  }
+
+  .join-form input[type='radio'],
+  .join-form input[type='checkbox'] {
+    width: 1.25rem;
+    height: 1.25rem;
+    accent-color: var(--color-primary);
+  }
+
+  .join-form input[aria-invalid='true'] {
+    border-color: var(--color-error);
+    outline: 2px solid var(--color-error);
+  }
+
+  .join-form__check {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: 0.25rem var(--space-1);
+  }
+
+  .join-form__check input {
+    margin-top: 0.2rem;
+  }
+
+  .join-form__check .join-form__error {
+    grid-column: 2;
+  }
+
+  .join-form__hint {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: 0.95rem;
+  }
+
+  .join-form__error {
+    margin: 0;
+    color: var(--color-error);
+    font-weight: 600;
+  }
+
+  .join-form__summary {
+    margin-bottom: var(--space-3);
+    padding: var(--space-2);
+    border: 2px solid var(--color-error);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+  }
+
+  .join-form__summary h3 {
+    margin: 0 0 var(--space-1);
+    font-size: 1.1rem;
+  }
+
+  .join-form__summary ul {
+    margin: 0;
+  }
+
+  .join-form__summary a {
+    color: var(--color-error);
+  }
+
+  .join-form fieldset:disabled {
+    opacity: 0.6;
+  }
+</style>

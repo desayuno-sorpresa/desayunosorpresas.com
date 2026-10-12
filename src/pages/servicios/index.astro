@@ -1,0 +1,50 @@
+---
+import { getCollection } from 'astro:content';
+import ServiceCard from '@/components/ServiceCard.astro';
+import { includeDrafts } from '@/config/build';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { visibleItems } from '@/lib/publishing';
+import { withBase } from '@/lib/url';
+
+const services = visibleItems(
+  (await getCollection('servicios')).map((entry) => ({ id: entry.id, ...entry.data })),
+  includeDrafts,
+);
+---
+
+<BaseLayout
+  title="Servicios"
+  description="Servicios para pequeños y medianos negocios de desayunos sorpresa."
+>
+  <section class="section container">
+    <h1>Servicios para tu negocio</h1>
+    <p class="lead">Servicios pensados para negocios de desayunos sorpresa.</p>
+    {services.length === 0 ? (
+      <p class="notice">
+        Pronto publicaremos nuestros servicios. Mientras tanto,{' '}
+        <a href={withBase('#solicitud')}>solicita tu ingreso al grupo privado de negocios</a>.
+      </p>
+    ) : (
+      <div class="services">
+        {services.map((service) => (
+          <ServiceCard
+            title={service.title}
+            summary={service.summary}
+            href={withBase(`servicios/${service.id}/`)}
+            cover={service.cover}
+            coverAlt={service.coverAlt}
+            isDraft={service.status === 'borrador'}
+          />
+        ))}
+      </div>
+    )}
+  </section>
+</BaseLayout>
+
+<style>
+  .services {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+    gap: var(--space-2);
+  }
+</style>

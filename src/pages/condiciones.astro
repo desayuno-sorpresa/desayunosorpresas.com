@@ -1,0 +1,43 @@
+---
+import { siteConfig } from '@/config/site';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { withBase } from '@/lib/url';
+---
+
+<BaseLayout
+  title="Condiciones de los grupos"
+  description="Condiciones para ingresar y participar en los grupos de WhatsApp de clientes y de negocios de desayunos sorpresa."
+>
+  <section class="section container prose">
+    <h1>Condiciones de los grupos</h1>
+    {siteConfig.provisional.conditions && (
+      <p class="notice" role="note">
+        Condiciones provisionales: pueden cambiar antes de la apertura de los grupos.
+      </p>
+    )}
+    <p>
+      El ingreso a los grupos se aprueba manualmente. Un administrador revisa cada solicitud y, si
+      se cumplen las condiciones, envía el enlace del grupo por WhatsApp.
+    </p>
+    {siteConfig.groups.map((group) => (
+      <section aria-labelledby={group.id}>
+        <h2 id={group.id}>{group.title}</h2>
+        <p>{group.description}</p>
+        <ul>
+          {group.conditions.map((condition) => (
+            <li>{condition}</li>
+          ))}
+        </ul>
+      </section>
+    ))}
+    <p>
+      <a href={withBase('#solicitud')}>Solicitar ingreso a un grupo</a>
+    </p>
+  </section>
+</BaseLayout>
+
+<style>
+  .prose {
+    max-width: 48rem;
+  }
+</style>

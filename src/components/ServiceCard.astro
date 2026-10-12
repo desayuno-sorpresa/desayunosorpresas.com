@@ -1,0 +1,78 @@
+---
+import type { ImageMetadata } from 'astro';
+import { Image } from 'astro:assets';
+
+interface Props {
+  title: string;
+  summary: string;
+  href: string;
+  cover: ImageMetadata;
+  coverAlt: string;
+  isDraft: boolean;
+}
+
+const { title, summary, href, cover, coverAlt, isDraft } = Astro.props;
+---
+
+<article class="service-card">
+  <Image
+    src={cover}
+    alt={coverAlt}
+    widths={[400, 800]}
+    sizes="(min-width: 60rem) 30vw, (min-width: 40rem) 45vw, 100vw"
+    loading="lazy"
+  />
+  <div class="service-card__body">
+    {isDraft && <p class="service-card__draft">Borrador</p>}
+    <h2>
+      <a href={href}>{title}</a>
+    </h2>
+    <p>{summary}</p>
+  </div>
+</article>
+
+<style>
+  .service-card {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  .service-card img {
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
+  }
+
+  .service-card__body {
+    padding: var(--space-2);
+  }
+
+  .service-card h2 {
+    margin: 0 0 var(--space-1);
+    font-size: 1.25rem;
+  }
+
+  /* Toda la tarjeta es clicable sin anidar enlaces. */
+  .service-card h2 a::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  .service-card p {
+    margin: 0;
+  }
+
+  .service-card__draft {
+    display: inline-block;
+    margin-bottom: var(--space-1) !important;
+    padding: 0 0.5rem;
+    border-radius: 0.25rem;
+    background: var(--color-notice-bg);
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+</style>

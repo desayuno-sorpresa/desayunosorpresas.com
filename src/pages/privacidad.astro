@@ -1,0 +1,48 @@
+---
+import { siteConfig } from '@/config/site';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Tratamiento de datos personales"
+  description="Cómo se usan los datos que envías al solicitar ingreso a los grupos de WhatsApp."
+>
+  <section class="section container prose">
+    <h1>Tratamiento de datos personales</h1>
+    {siteConfig.provisional.privacy && (
+      <p class="notice" role="note">
+        Texto provisional pendiente de revisión legal y de los datos del responsable del
+        tratamiento.
+      </p>
+    )}
+    <h2>Qué datos se usan</h2>
+    <p>
+      Al solicitar ingreso a un grupo indicas tu nombre, tu ciudad y, si tienes un negocio, su
+      nombre y su Instagram, web o catálogo. Además, WhatsApp muestra al administrador tu número de
+      teléfono.
+    </p>
+    <h2>Dónde se guardan</h2>
+    <p>
+      Este sitio web no guarda ni envía tus datos a ningún servidor. El formulario solo prepara un
+      mensaje que tú decides enviar por WhatsApp al administrador.
+    </p>
+    <h2>Para qué se usan</h2>
+    <p>
+      Únicamente para verificar las condiciones de ingreso al grupo elegido y responder a tu
+      solicitud.
+    </p>
+    <h2>Tus derechos</h2>
+    <p>
+      De acuerdo con la Ley 1581 de 2012 de Colombia, puedes conocer, actualizar, rectificar y
+      solicitar la supresión de tus datos, así como revocar la autorización, escribiendo al mismo
+      número de WhatsApp al que enviaste la solicitud o al correo{' '}
+      <a href={`mailto:${siteConfig.contactEmail}`}>{siteConfig.contactEmail}</a>.
+    </p>
+  </section>
+</BaseLayout>
+
+<style>
+  .prose {
+    max-width: 48rem;
+  }
+</style>

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "ejemplo-fotografia",
+    "title": "Servicio de ejemplo: fotografía de producto",
+    "summary": "Contenido de ejemplo. Se reemplazará por los servicios reales desde Google Sheets.",
+    "description": [
+      "Este es un servicio de ejemplo para comprobar el diseño y las rutas del sitio.",
+      "Los servicios reales se cargarán desde la hoja de cálculo de Google con sus fotos de Google Drive."
+    ],
+    "benefits": ["Beneficio de ejemplo 1", "Beneficio de ejemplo 2"],
+    "order": 1,
+    "status": "borrador",
+    "ctaLabel": "Quiero este servicio",
+    "cover": "./ejemplo-fotografia/01-portada.webp",
+    "coverAlt": "Imagen de ejemplo con fondo amarillo",
+    "gallery": [
+      { "src": "./ejemplo-fotografia/02-detalle.webp", "alt": "Imagen de ejemplo con fondo rosado" }
+    ],
+    "updatedAt": "2026-10-12"
+  },
+  {
+    "id": "ejemplo-catalogo",
+    "title": "Servicio de ejemplo: catálogo digital",
+    "summary": "Contenido de ejemplo. Se reemplazará por los servicios reales desde Google Sheets.",
+    "description": ["Segundo servicio de ejemplo para comprobar el listado."],
+    "benefits": [],
+    "order": 2,
+    "status": "borrador",
+    "cover": "./ejemplo-catalogo/01-portada.webp",
+    "coverAlt": "Imagen de ejemplo con fondo verde",
+    "gallery": [],
+    "updatedAt": "2026-10-12"
+  }
+]

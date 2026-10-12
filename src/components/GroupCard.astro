@@ -1,0 +1,52 @@
+---
+interface Props {
+  title: string;
+  audience: string;
+  description: string;
+  conditionsHref: string;
+}
+
+const { title, audience, description, conditionsHref } = Astro.props;
+---
+
+<article class="group-card">
+  <p class="group-card__audience">{audience}</p>
+  <h3>{title}</h3>
+  <p>{description}</p>
+  <a href={conditionsHref}>
+    Ver condiciones<span class="visually-hidden"> del {title}</span>
+  </a>
+</article>
+
+<style>
+  .group-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  .group-card h3 {
+    margin: 0;
+    font-size: 1.3rem;
+  }
+
+  .group-card p {
+    margin: 0;
+  }
+
+  .group-card__audience {
+    color: var(--color-muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .group-card a {
+    margin-top: auto;
+  }
+</style>

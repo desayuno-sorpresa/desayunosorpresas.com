@@ -1,0 +1,77 @@
+---
+import SeoHead from '@/components/SeoHead.astro';
+import SiteFooter from '@/components/SiteFooter.astro';
+import SiteHeader from '@/components/SiteHeader.astro';
+import { includeDrafts } from '@/config/build';
+import { siteConfig } from '@/config/site';
+import { buildWaMeUrl } from '@/lib/whatsapp';
+import '@/styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  noindex?: boolean;
+  jsonLd?: Record<string, unknown>;
+}
+
+const { title, description, noindex = includeDrafts, jsonLd } = Astro.props;
+const siteName = siteConfig.brandName ?? siteConfig.name;
+const whatsApp = siteConfig.adminWhatsApp
+  ? { label: siteConfig.adminWhatsApp, href: buildWaMeUrl(siteConfig.adminWhatsApp) }
+  : null;
+---
+
+<!doctype html>
+<html lang={siteConfig.lang}>
+  <head>
+    <SeoHead
+      title={title}
+      description={description}
+      noindex={noindex}
+      {...(jsonLd ? { jsonLd } : {})}
+    />
+  </head>
+  <body>
+    <a class="skip-link" href="#contenido">
+      Saltar al contenido
+    </a>
+    {includeDrafts && (
+      <p class="draft-banner" role="note">
+        Vista previa: se muestran borradores. No publicar este build.
+      </p>
+    )}
+    <SiteHeader siteName={siteName} nav={siteConfig.nav} />
+    <main id="contenido" tabindex="-1">
+      <slot />
+    </main>
+    <SiteFooter siteName={siteName} contactEmail={siteConfig.contactEmail} whatsApp={whatsApp} />
+  </body>
+</html>
+
+<style>
+  .skip-link {
+    position: absolute;
+    left: var(--space-2);
+    top: -10rem;
+    z-index: 10;
+    padding: var(--space-1) var(--space-2);
+    background: var(--color-surface);
+    border-radius: var(--radius);
+  }
+
+  .skip-link:focus {
+    top: var(--space-1);
+  }
+
+  .draft-banner {
+    margin: 0;
+    padding: var(--space-1) var(--space-2);
+    background: var(--color-notice-bg);
+    text-align: center;
+    font-weight: 600;
+  }
+
+  main:focus {
+    outline: none;
+  }
+</style>

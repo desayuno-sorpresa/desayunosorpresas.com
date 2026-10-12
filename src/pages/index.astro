@@ -1,0 +1,93 @@
+---
+import GroupCard from '@/components/GroupCard.astro';
+import JoinRequestForm from '@/components/JoinRequestForm.astro';
+import { siteConfig } from '@/config/site';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { withBase } from '@/lib/url';
+
+const conditionsHref = withBase('condiciones/');
+// Solo datos visibles en la página (pie: marca, correo y WhatsApp).
+const jsonLd = siteConfig.brandName
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: siteConfig.brandName,
+      ...(Astro.site ? { url: Astro.site.href } : {}),
+      email: siteConfig.contactEmail,
+      ...(siteConfig.adminWhatsApp ? { telephone: siteConfig.adminWhatsApp } : {}),
+    }
+  : undefined;
+---
+
+<BaseLayout
+  title={siteConfig.name}
+  description={siteConfig.description}
+  {...(jsonLd ? { jsonLd } : {})}
+>
+  <section class="section container">
+    <h1>Servicios y comunidad para negocios de desayunos sorpresa</h1>
+    <p class="lead">
+      Ofrecemos servicios para pequeños y medianos negocios de desayunos sorpresa y dos grupos de
+      WhatsApp: uno para conectar con clientes y otro solo para negocios.
+    </p>
+    <p class="hero-actions">
+      <a class="button button--whatsapp" href="#solicitud">
+        Solicitar ingreso a un grupo
+      </a>
+      <a href={withBase('servicios/')}>Ver servicios</a>
+    </p>
+  </section>
+
+  <section class="section container" aria-labelledby="grupos">
+    <h2 id="grupos">Nuestros grupos de WhatsApp</h2>
+    <div class="groups">
+      {siteConfig.groups.map((group) => (
+        <GroupCard
+          title={group.title}
+          audience={group.audience}
+          description={group.description}
+          conditionsHref={`${conditionsHref}#${group.id}`}
+        />
+      ))}
+    </div>
+  </section>
+
+  <section class="section container" aria-labelledby="solicitud" id="solicitud">
+    <h2>Solicita tu ingreso</h2>
+    <ol class="steps">
+      <li>Completa el formulario y elige el grupo.</li>
+      <li>Se abre WhatsApp con tu solicitud lista: envíala.</li>
+      <li>
+        Un administrador revisa las condiciones y, si se cumplen, te envía el enlace del grupo.
+      </li>
+    </ol>
+    <JoinRequestForm
+      groups={siteConfig.groups.map(({ id, title }) => ({ id, title }))}
+      adminWhatsApp={siteConfig.adminWhatsApp}
+      conditionsHref={conditionsHref}
+      privacyHref={withBase('privacidad/')}
+    />
+  </section>
+</BaseLayout>
+
+<style>
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+  }
+
+  .groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    gap: var(--space-2);
+  }
+
+  .steps {
+    max-width: 40rem;
+    margin: 0 0 var(--space-3);
+    padding-left: 1.25rem;
+  }
+</style>
