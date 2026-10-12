@@ -1,11 +1,11 @@
 import { reviewAltTexts, reviewTexts } from './content-review.ts';
 import { extractDriveFileId } from './drive.ts';
 import { SERVICE_LIMITS, SLUG_PATTERN } from './limits.ts';
+import { PHOTOS_SHEET, rowProblem, SERVICES_SHEET, type Problem, type RowRef } from './problems.ts';
 import { readTable, type SheetCell, type SheetGrid } from './sheet.ts';
 import { parsePrice, singleLine, slugify, splitLines } from './text.ts';
 
-export const SERVICES_SHEET = 'Servicios';
-export const PHOTOS_SHEET = 'Fotos';
+export { PHOTOS_SHEET, SERVICES_SHEET } from './problems.ts';
 
 const SERVICE_COLUMNS = [
   'titulo',
@@ -20,6 +20,8 @@ const PHOTO_COLUMNS = ['servicio', 'foto', 'descripcion_foto'] as const;
 export interface DriveImageRef {
   fileId: string;
   alt: string;
+  /** Fila de la hoja donde está la foto (portada en Servicios, galería en Fotos). */
+  source: RowRef;
 }
 
 /** Servicio publicado tal como sale de la hoja, antes de descargar imágenes. */
@@ -36,12 +38,25 @@ export interface ServiceDraft {
   gallery: DriveImageRef[];
 }
 
+/** Estado informativo de una fila que no se publica pero tampoco tiene errores. */
+export interface RowNote extends RowRef {
+  text: string;
+}
+
 export interface ParseResult {
   services: ServiceDraft[];
-  errors: string[];
+  problems: Problem[];
+  notes: RowNote[];
   /** Filas con datos en la pestaña Servicios y cuántas están en borrador (para diagnóstico). */
   rows: number;
   drafts: number;
+}
+
+/** Cómo citar una foto desde otra fila: "la portada (Servicios, fila 2)". */
+export function photoName(ref: DriveImageRef): string {
+  return ref.source.sheet === SERVICES_SHEET
+    ? `la portada (${SERVICES_SHEET}, fila ${ref.source.row})`
+    : `la foto de ${PHOTOS_SHEET}, fila ${ref.source.row}`;
 }
 
 function driveId(cell: SheetCell): string | null {
@@ -65,24 +80,25 @@ function parseOrder(text: string, fallback: number): number | null {
 
 /**
  * Convierte las pestañas "Servicios" y "Fotos" en servicios publicados.
- * Las filas en estado "Borrador" se ignoran por completo (el repositorio es público).
+ * Las filas en estado "Borrador" no se publican ni se revisan (el repositorio es público).
  */
 export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): ParseResult {
-  const errors: string[] = [];
+  const problems: Problem[] = [];
+  const notes: RowNote[] = [];
   const servicesTable = readTable(SERVICES_SHEET, servicesGrid, SERVICE_COLUMNS);
   // La pestaña de fotos puede estar vacía si ningún servicio tiene galería.
   const photosTable =
     photosGrid.length === 0
-      ? { records: [], errors: [] }
+      ? { records: [], problems: [] }
       : readTable(PHOTOS_SHEET, photosGrid, PHOTO_COLUMNS);
-  errors.push(...servicesTable.errors, ...photosTable.errors);
+  problems.push(...servicesTable.problems, ...photosTable.problems);
 
   const services: ServiceDraft[] = [];
   const draftSlugs = new Set<string>();
   const rowBySlug = new Map<string, number>();
 
   for (const record of servicesTable.records) {
-    const at = `Servicios, fila ${record.row}`;
+    const at: RowRef = { sheet: SERVICES_SHEET, row: record.row };
     const rowErrors: string[] = [];
     const title = singleLine(record.get('titulo').text);
     const status = singleLine(record.get('estado').text).toLowerCase();
@@ -91,10 +107,11 @@ export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): P
 
     if (status === 'borrador') {
       draftSlugs.add(slug);
+      notes.push({ ...at, text: 'Borrador: no se publica ni se revisa' });
       continue;
     }
     if (status !== 'publicado') {
-      errors.push(`${at}: "Estado" debe ser "Publicado" o "Borrador".`);
+      problems.push(rowProblem(at, '"Estado" debe ser "Publicado" o "Borrador".'));
       continue;
     }
 
@@ -142,7 +159,7 @@ export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): P
     );
 
     if (rowErrors.length > 0 || coverId === null || order === null || price === null) {
-      errors.push(...rowErrors.map((message) => `${at}: ${message}`));
+      problems.push(...rowErrors.map((message) => rowProblem(at, message)));
       continue;
     }
 
@@ -156,23 +173,28 @@ export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): P
       ...(price === undefined ? {} : { priceFrom: price }),
       order,
       ...(ctaLabel === '' ? {} : { ctaLabel }),
-      cover: { fileId: coverId, alt: coverAlt },
+      cover: { fileId: coverId, alt: coverAlt, source: at },
       gallery: [],
     });
   }
 
   const bySlug = new Map(services.map((service) => [service.slug, service]));
   const titleToSlug = new Map(services.map((service) => [slugify(service.title), service.slug]));
-  const photos: { slug: string; row: number; order: number; ref: DriveImageRef }[] = [];
+  const photos: { slug: string; order: number; ref: DriveImageRef }[] = [];
 
   for (const record of photosTable.records) {
-    const at = `Fotos, fila ${record.row}`;
+    const at: RowRef = { sheet: PHOTOS_SHEET, row: record.row };
     const reference = slugify(record.get('servicio').text);
     const slug = bySlug.has(reference) ? reference : titleToSlug.get(reference);
     if (slug === undefined) {
-      if (!draftSlugs.has(reference)) {
-        errors.push(
-          `${at}: no existe un servicio publicado llamado "${record.get('servicio').text}".`,
+      if (draftSlugs.has(reference)) {
+        notes.push({ ...at, text: 'Servicio en borrador: no se publica' });
+      } else {
+        problems.push(
+          rowProblem(
+            at,
+            `"Servicio": no existe un servicio publicado llamado "${record.get('servicio').text}" (o tiene errores).`,
+          ),
         );
       }
       continue;
@@ -190,49 +212,52 @@ export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): P
     if (order === null) rowErrors.push('"Orden" debe ser un número entero.');
     rowErrors.push(...reviewTexts([{ label: 'Descripción foto', value: alt }]));
     if (rowErrors.length > 0 || fileId === null || order === null) {
-      errors.push(...rowErrors.map((message) => `${at}: ${message}`));
+      problems.push(...rowErrors.map((message) => rowProblem(at, message)));
       continue;
     }
-    photos.push({ slug, row: record.row, order, ref: { fileId, alt } });
+    photos.push({ slug, order, ref: { fileId, alt, source: at } });
   }
 
-  const photoRows = new Map<DriveImageRef, number>();
   for (const photo of photos.toSorted((a, b) => a.order - b.order)) {
     bySlug.get(photo.slug)?.gallery.push(photo.ref);
-    photoRows.set(photo.ref, photo.row);
   }
 
   // Revisión de las fotos de cada servicio en conjunto: repetidas y descripciones.
   for (const service of services) {
-    const at = `Servicios, fila ${rowBySlug.get(service.slug)}`;
-    const labelled = [
-      { label: 'Descripción portada', ref: service.cover },
-      ...service.gallery.map((ref) => ({
-        label: `Descripción foto (Fotos, fila ${photoRows.get(ref)})`,
-        ref,
-      })),
-    ];
-    const firstUse = new Map<string, string>();
-    for (const { label, ref } of labelled) {
-      const where = label.replace('Descripción ', '');
+    const images = [service.cover, ...service.gallery];
+    const firstUse = new Map<string, DriveImageRef>();
+    for (const ref of images) {
       const previous = firstUse.get(ref.fileId);
       if (previous) {
-        errors.push(`${at}: la ${where} es la misma imagen que la ${previous}; usa otra foto.`);
+        problems.push(
+          rowProblem(
+            ref.source,
+            `"Foto" es la misma imagen que ${photoName(previous)}; usa otra foto.`,
+          ),
+        );
       } else {
-        firstUse.set(ref.fileId, where);
+        firstUse.set(ref.fileId, ref);
       }
     }
     const altProblems = reviewAltTexts(
-      labelled.map(({ label, ref }) => ({ label, alt: ref.alt })),
+      images.map((ref) => ({
+        label: ref.source.sheet === SERVICES_SHEET ? 'Descripción portada' : 'Descripción foto',
+        origin: photoName(ref),
+        alt: ref.alt,
+      })),
       service.title,
       service.summary,
     );
-    errors.push(...altProblems.map((message) => `${at}: ${message}`));
+    for (const { index, message } of altProblems) {
+      const ref = images[index];
+      if (ref) problems.push(rowProblem(ref.source, message));
+    }
   }
 
   return {
     services: services.toSorted((a, b) => a.order - b.order),
-    errors,
+    problems,
+    notes,
     rows: servicesTable.records.length,
     drafts: draftSlugs.size,
   };

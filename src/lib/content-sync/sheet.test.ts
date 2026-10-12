@@ -5,7 +5,7 @@ const cell = (text: string) => ({ text });
 
 describe('readTable', () => {
   it('lee por nombre de columna normalizado e ignora filas vacías', () => {
-    const { records, errors } = readTable(
+    const { records, problems } = readTable(
       'Servicios',
       [
         [cell('Título'), cell('Estado')],
@@ -15,7 +15,7 @@ describe('readTable', () => {
       ],
       ['titulo'],
     );
-    expect(errors).toEqual([]);
+    expect(problems).toEqual([]);
     expect(records.map((r) => [r.row, r.get('titulo').text, r.get('estado').text])).toEqual([
       [2, 'Fotos', 'Publicado'],
       [4, 'Logo', ''],
@@ -23,7 +23,9 @@ describe('readTable', () => {
   });
 
   it('informa las columnas que faltan', () => {
-    const { errors } = readTable('Fotos', [[cell('Servicio')]], ['servicio', 'foto']);
-    expect(errors).toEqual(['Pestaña "Fotos": faltan las columnas "foto".']);
+    const { problems } = readTable('Fotos', [[cell('Servicio')]], ['servicio', 'foto']);
+    expect(problems).toEqual([
+      { sheet: 'Fotos', message: 'Pestaña "Fotos": faltan las columnas "foto".' },
+    ]);
   });
 });

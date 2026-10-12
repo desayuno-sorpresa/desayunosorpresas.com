@@ -6,11 +6,21 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { buildEntry, imagePaths, type ServiceEntry } from '../src/lib/content-sync/entries.ts';
 import {
+  formatProblem,
+  rowProblem,
+  type Problem,
+  type SheetName,
+} from '../src/lib/content-sync/problems.ts';
+import {
   parseServices,
+  photoName,
   PHOTOS_SHEET,
   SERVICES_SHEET,
   type DriveImageRef,
+  type RowNote,
 } from '../src/lib/content-sync/services.ts';
+import type { SheetGrid } from '../src/lib/content-sync/sheet.ts';
+import { buildStatusWrites } from '../src/lib/content-sync/status.ts';
 import { getAccessToken, parseServiceAccount } from './google/auth.ts';
 import { createGoogleSource, SCOPES, type ContentSource } from './google/client.ts';
 
@@ -22,9 +32,13 @@ export interface SyncOptions {
   outDir: string;
   /** Fecha YYYY-MM-DD para servicios nuevos o modificados. */
   today: string;
+  /** Fecha y hora que se anota en la hoja junto al resultado de la revisión. */
+  reviewedAt: string;
 }
 
 export interface SyncReport {
+  /** Avisos que no bloquean la publicación (p. ej. no se pudo escribir la revisión). */
+  warnings: string[];
   rows: number;
   drafts: number;
   services: number;
@@ -33,11 +47,13 @@ export interface SyncReport {
 }
 
 export class SyncError extends Error {
-  readonly problems: readonly string[];
+  readonly problems: readonly Problem[];
+  readonly warnings: readonly string[];
 
-  constructor(problems: readonly string[]) {
+  constructor(problems: readonly Problem[], warnings: readonly string[] = []) {
     super(`La hoja tiene ${problems.length} problema(s).`);
     this.problems = problems;
+    this.warnings = warnings;
   }
 }
 
@@ -79,49 +95,85 @@ function sameBytes(a: Uint8Array | null, b: Uint8Array): boolean {
   return a !== null && Buffer.from(a).equals(Buffer.from(b));
 }
 
+/**
+ * Escribe el resultado de la revisión en "Errores a corregir" / "Detalle error" de cada pestaña.
+ * Devuelve avisos si no puede: no bloquean la publicación ni ocultan los demás errores.
+ */
+async function writeReview(
+  source: ContentSource,
+  sheets: Map<string, SheetGrid>,
+  problems: readonly Problem[],
+  notes: readonly RowNote[],
+  reviewedAt: string,
+): Promise<string[]> {
+  const warnings: string[] = [];
+  for (const sheet of [SERVICES_SHEET, PHOTOS_SHEET] satisfies SheetName[]) {
+    const grid = sheets.get(sheet);
+    if (!grid) continue;
+    const writes = buildStatusWrites(sheet, grid, problems, notes, reviewedAt);
+    if (writes === null) {
+      warnings.push(
+        `Pestaña "${sheet}": agrega las columnas "Errores a corregir" y "Detalle error" para ver ahí la revisión.`,
+      );
+      continue;
+    }
+    try {
+      await source.writeColumns(sheet, writes);
+    } catch (error) {
+      warnings.push(`No se pudo escribir la revisión en la hoja: ${(error as Error).message}`);
+    }
+  }
+  return warnings;
+}
+
 export async function runSync(source: ContentSource, options: SyncOptions): Promise<SyncReport> {
   const sheets = await source.readSheets([SERVICES_SHEET, PHOTOS_SHEET]);
-  const { services, errors, rows, drafts } = parseServices(
+  const { services, problems, notes, rows, drafts } = parseServices(
     sheets.get(SERVICES_SHEET) ?? [],
     sheets.get(PHOTOS_SHEET) ?? [],
   );
-  if (!sheets.has(SERVICES_SHEET)) errors.unshift(`Falta la pestaña "${SERVICES_SHEET}".`);
-  if (!sheets.has(PHOTOS_SHEET)) errors.unshift(`Falta la pestaña "${PHOTOS_SHEET}".`);
-  if (errors.length > 0) throw new SyncError(errors);
+  for (const sheet of [PHOTOS_SHEET, SERVICES_SHEET]) {
+    if (!sheets.has(sheet)) problems.unshift({ message: `Falta la pestaña "${sheet}".` });
+  }
 
   // Descarga y convierte todo antes de tocar el disco: si algo falla, no queda a medias.
-  const imageProblems: string[] = [];
   const rendered = new Map<string, Uint8Array[]>();
-  for (const service of services) {
-    const images: Uint8Array[] = [];
-    for (const ref of [service.cover, ...service.gallery]) {
-      try {
-        images.push(await toWebp(ref, source));
-      } catch (error) {
-        imageProblems.push(`Servicio "${service.title}": ${(error as Error).message}`);
+  if (problems.length === 0) {
+    for (const service of services) {
+      const refs = [service.cover, ...service.gallery];
+      const images: Uint8Array[] = [];
+      for (const ref of refs) {
+        try {
+          images.push(await toWebp(ref, source));
+        } catch (error) {
+          problems.push(rowProblem(ref.source, `"Foto": ${(error as Error).message}`));
+        }
       }
-    }
-    rendered.set(service.slug, images);
+      rendered.set(service.slug, images);
 
-    // La misma foto subida dos veces a Drive (enlaces distintos, imagen idéntica).
-    const names = [
-      'la portada',
-      ...service.gallery.map((_, index) => `la foto ${index + 1} de la galería`),
-    ];
-    // Solo si todas se descargaron; si no, los índices no corresponden a las filas.
-    if (images.length !== 1 + service.gallery.length) continue;
-    images.forEach((image, index) => {
-      const twin = images.findIndex(
-        (other, otherIndex) => otherIndex < index && sameBytes(other, image),
-      );
-      if (twin !== -1) {
-        imageProblems.push(
-          `Servicio "${service.title}": ${names[index]} es idéntica a ${names[twin]}; usa otra foto.`,
+      // La misma foto subida dos veces a Drive (enlaces distintos, imagen idéntica).
+      // Solo si todas se descargaron; si no, los índices no corresponden a las filas.
+      if (images.length !== refs.length) continue;
+      images.forEach((image, index) => {
+        const twin = images.findIndex(
+          (other, otherIndex) => otherIndex < index && sameBytes(other, image),
         );
-      }
-    });
+        const ref = refs[index];
+        const original = refs[twin];
+        if (twin !== -1 && ref && original) {
+          problems.push(
+            rowProblem(
+              ref.source,
+              `"Foto" es idéntica a ${photoName(original)} (mismo archivo subido dos veces); usa otra foto.`,
+            ),
+          );
+        }
+      });
+    }
   }
-  if (imageProblems.length > 0) throw new SyncError(imageProblems);
+
+  const warnings = await writeReview(source, sheets, problems, notes, options.reviewedAt);
+  if (problems.length > 0) throw new SyncError(problems, warnings);
 
   const jsonPath = path.join(options.outDir, JSON_FILE);
   const previous = await readPrevious(jsonPath);
@@ -178,11 +230,31 @@ export async function runSync(source: ContentSource, options: SyncOptions): Prom
     changed = true;
   }
 
-  return { rows, drafts, services: entries.length, images: imageCount, changed };
+  return { warnings, rows, drafts, services: entries.length, images: imageCount, changed };
 }
 
-function todayInBogota(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+function nowInBogota(): { today: string; reviewedAt: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '';
+  const today = `${get('year')}-${get('month')}-${get('day')}`;
+  return { today, reviewedAt: `${today} ${get('hour')}:${get('minute')}` };
+}
+
+async function appendToFiles(files: readonly (string | undefined)[], text: string): Promise<void> {
+  for (const file of files) if (file) await appendFile(file, text);
+}
+
+function bulletList(items: readonly string[]): string {
+  return items.map((item) => `- ${item}`).join('\n');
 }
 
 async function main(): Promise<void> {
@@ -195,15 +267,17 @@ async function main(): Promise<void> {
   const token = await getAccessToken(account, SCOPES);
   const report = await runSync(createGoogleSource(spreadsheetId, token, account.clientEmail), {
     outDir: DEFAULT_OUT_DIR,
-    today: todayInBogota(),
+    ...nowInBogota(),
   });
   const message =
     `Filas leídas en "Servicios": ${report.rows} (${report.drafts} en borrador). ` +
     `Publicados: ${report.services}, fotos: ${report.images}. ` +
     (report.changed ? 'Hay cambios.' : 'Sin cambios.');
   console.log(message);
-  const summary = process.env['GITHUB_STEP_SUMMARY'];
-  if (summary) await appendFile(summary, `${message}\n\n`);
+  for (const warning of report.warnings) console.warn(`Aviso: ${warning}`);
+  const warnings =
+    report.warnings.length > 0 ? `\n\n**Avisos:**\n\n${bulletList(report.warnings)}` : '';
+  await appendToFiles([process.env['GITHUB_STEP_SUMMARY']], `${message}${warnings}\n\n`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -211,19 +285,38 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const problems =
       error instanceof SyncError
         ? error.problems
-        : [error instanceof Error ? error.message : String(error)];
+        : [{ message: error instanceof Error ? error.message : String(error) }];
+    const warnings = error instanceof SyncError ? error.warnings : [];
     const title =
       error instanceof SyncError
         ? `${error.message} Corrígelos en Google Sheets:`
         : 'No se pudo sincronizar:';
     console.error(title);
-    for (const problem of problems) console.error(`  - ${problem}`);
+    for (const problem of problems) console.error(`  - ${formatProblem(problem)}`);
+    for (const warning of warnings) console.warn(`Aviso: ${warning}`);
 
-    // En GitHub Actions la lista va al resumen de la ejecución y al issue de revisión.
-    const markdown = `### ${title}\n\n${problems.map((problem) => `- ${problem}`).join('\n')}\n`;
-    for (const file of [process.env['GITHUB_STEP_SUMMARY'], process.env['SYNC_PROBLEMS_FILE']]) {
-      if (file) await appendFile(file, markdown);
-    }
+    // Resumen de la ejecución: lista completa.
+    const all = bulletList(problems.map(formatProblem));
+    const notice = warnings.length > 0 ? `\n\n**Avisos:**\n\n${bulletList(warnings)}` : '';
+    await appendToFiles([process.env['GITHUB_STEP_SUMMARY']], `### ${title}\n\n${all}${notice}\n`);
+
+    // Issue (público): los errores de filas se corrigen en la hoja; aquí solo se resumen.
+    const inRows = problems.filter((problem) => problem.row !== undefined).length;
+    const general = problems.filter((problem) => problem.row === undefined).map(formatProblem);
+    const lines = [
+      ...(inRows > 0 && warnings.length === 0
+        ? [
+            `Hay **${inRows} error(es)** en filas de la hoja. Revisa las columnas **Errores a corregir** y **Detalle error** de las pestañas "${SERVICES_SHEET}" y "${PHOTOS_SHEET}".`,
+          ]
+        : []),
+      // Si no se pudo escribir en la hoja, la lista completa va en el issue.
+      ...(inRows > 0 && warnings.length > 0
+        ? ['No se pudo escribir la revisión en la hoja. Errores:', '', all]
+        : []),
+      ...(general.length > 0 ? ['', bulletList(general)] : []),
+      ...(warnings.length > 0 ? ['', '**Avisos:**', '', bulletList(warnings)] : []),
+    ];
+    await appendToFiles([process.env['SYNC_PROBLEMS_FILE']], `${lines.join('\n')}\n`);
     process.exit(1);
   });
 }

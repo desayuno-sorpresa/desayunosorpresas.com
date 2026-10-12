@@ -84,8 +84,17 @@ export function reviewTexts(fields: readonly ReviewField[]): string[] {
 }
 
 export interface AltReview {
+  /** Columna donde está la descripción ("Descripción portada" o "Descripción foto"). */
   label: string;
+  /** Dónde está, para citarla desde otra fila: "la portada (Servicios, fila 2)". */
+  origin: string;
   alt: string;
+}
+
+export interface AltProblem {
+  /** Posición en la lista recibida. */
+  index: number;
+  message: string;
 }
 
 /**
@@ -96,27 +105,31 @@ export function reviewAltTexts(
   alts: readonly AltReview[],
   title: string,
   summary: string,
-): string[] {
-  const problems: string[] = [];
+): AltProblem[] {
+  const problems: AltProblem[] = [];
   const forbidden = new Map([
     [normalizeForReview(title), 'el título'],
     [normalizeForReview(summary), 'el resumen'],
   ]);
   const seen = new Map<string, string>();
-  for (const { label, alt } of alts) {
+  alts.forEach(({ label, origin, alt }, index) => {
     const normalized = normalizeForReview(alt);
     const repeated = forbidden.get(normalized);
     if (repeated) {
-      problems.push(`"${label}" repite ${repeated}; describe lo que se ve en la foto.`);
+      problems.push({
+        index,
+        message: `"${label}" repite ${repeated} del servicio; describe lo que se ve en la foto.`,
+      });
     }
     const previous = seen.get(normalized);
     if (previous) {
-      problems.push(
-        `"${label}" es igual a "${previous}"; cada foto necesita su propia descripción.`,
-      );
+      problems.push({
+        index,
+        message: `"${label}" es igual a la de ${previous}; cada foto necesita su propia descripción.`,
+      });
     } else {
-      seen.set(normalized, label);
+      seen.set(normalized, origin);
     }
-  }
+  });
   return problems;
 }

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { SheetCell } from './sheet';
+import { formatProblem } from './problems';
+import type { SheetCell, SheetGrid } from './sheet';
 import { parseServices } from './services';
+
+/** Errores como texto de una línea, igual que en los registros del sync. */
+function errorsOf(services: SheetGrid, photos: SheetGrid): string[] {
+  return parseServices(services, photos).problems.map(formatProblem);
+}
 
 const ID_A = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 const ID_B = 'BBBBBBBBBBBBBBBBBBBBBBBBBBBB';
@@ -50,7 +56,7 @@ describe('parseServices', () => {
         row(['fotografia-de-producto', ID_B, 'Taza con mensaje personalizado', '1']),
       ],
     );
-    expect(result.errors).toEqual([]);
+    expect(result.problems).toEqual([]);
     expect(result.services).toEqual([
       {
         slug: 'fotografia-de-producto',
@@ -61,10 +67,22 @@ describe('parseServices', () => {
         priceFrom: 150000,
         order: 2,
         ctaLabel: 'Quiero fotos',
-        cover: { fileId: ID_A, alt: 'Bandeja de desayuno con globos dorados' },
+        cover: {
+          fileId: ID_A,
+          alt: 'Bandeja de desayuno con globos dorados',
+          source: { sheet: 'Servicios', row: 2 },
+        },
         gallery: [
-          { fileId: ID_B, alt: 'Taza con mensaje personalizado' },
-          { fileId: ID_C, alt: 'Detalle de la caja de regalo' },
+          {
+            fileId: ID_B,
+            alt: 'Taza con mensaje personalizado',
+            source: { sheet: 'Fotos', row: 3 },
+          },
+          {
+            fileId: ID_C,
+            alt: 'Detalle de la caja de regalo',
+            source: { sheet: 'Fotos', row: 2 },
+          },
         ],
       },
     ]);
@@ -78,14 +96,23 @@ describe('parseServices', () => {
     expect(result.services[0]?.cover.fileId).toBe(ID_B);
   });
 
-  it('ignora borradores y sus fotos sin errores', () => {
+  it('ignora borradores y sus fotos sin errores, con una nota por fila', () => {
     const draft = [...validService];
     draft[7] = 'Borrador';
     const result = parseServices(
       [row(SERVICE_HEADERS), row(draft)],
       [row(PHOTO_HEADERS), row(['Fotografía de producto', ID_B, 'Una foto de ejemplo', ''])],
     );
-    expect(result).toEqual({ services: [], errors: [], rows: 1, drafts: 1 });
+    expect(result).toEqual({
+      services: [],
+      problems: [],
+      notes: [
+        { sheet: 'Servicios', row: 2, text: 'Borrador: no se publica ni se revisa' },
+        { sheet: 'Fotos', row: 2, text: 'Servicio en borrador: no se publica' },
+      ],
+      rows: 1,
+      drafts: 1,
+    });
   });
 
   it('reporta errores con fila y columna', () => {
@@ -96,7 +123,7 @@ describe('parseServices', () => {
     invalid[10] = '';
     const result = parseServices([row(SERVICE_HEADERS), row(invalid)], [row(PHOTO_HEADERS)]);
     expect(result.services).toEqual([]);
-    expect(result.errors).toEqual([
+    expect(result.problems.map(formatProblem)).toEqual([
       'Servicios, fila 2: "Resumen" es demasiado corto (mínimo 10 caracteres).',
       'Servicios, fila 2: "Precio desde" debe ser un número, p. ej. 150000.',
       'Servicios, fila 2: "Portada" debe ser un enlace de Google Drive a la foto.',
@@ -109,14 +136,14 @@ describe('parseServices', () => {
     second[0] = 'Fotografía de producto';
     const unknownStatus = [...validService];
     unknownStatus[7] = 'Listo';
-    const result = parseServices(
+    const errors = errorsOf(
       [row(SERVICE_HEADERS), row(validService), row(second), row(unknownStatus)],
       [row(PHOTO_HEADERS), row(['Servicio inexistente', ID_B, 'Una foto cualquiera', ''])],
     );
-    expect(result.errors).toEqual([
+    expect(errors).toEqual([
       'Servicios, fila 3: el identificador "fotografia-de-producto" ya se usa en la fila 2.',
       'Servicios, fila 4: "Estado" debe ser "Publicado" o "Borrador".',
-      'Fotos, fila 2: no existe un servicio publicado llamado "Servicio inexistente".',
+      'Fotos, fila 2: "Servicio": no existe un servicio publicado llamado "Servicio inexistente" (o tiene errores).',
     ]);
   });
 
@@ -125,27 +152,27 @@ describe('parseServices', () => {
     promising[3] = 'Visibilidad mayor en google.';
     const result = parseServices([row(SERVICE_HEADERS), row(promising)], [row(PHOTO_HEADERS)]);
     expect(result.services).toEqual([]);
-    expect(result.errors).toEqual([
+    expect(result.problems.map(formatProblem)).toEqual([
       'Servicios, fila 2: "Descripción" promete resultados en Google o buscadores; no se pueden asegurar.',
       'Servicios, fila 2: "Descripción" escribe la marca como "Google".',
     ]);
   });
 
-  it('detecta la misma foto usada como portada y en la galería', () => {
-    const result = parseServices(
+  it('marca en la fila de Fotos la misma foto usada como portada', () => {
+    const errors = errorsOf(
       [row(SERVICE_HEADERS), row(validService)],
       [
         row(PHOTO_HEADERS),
         row(['Fotografía de producto', link(ID_A), 'Otra vista del desayuno', '']),
       ],
     );
-    expect(result.errors).toEqual([
-      'Servicios, fila 2: la foto (Fotos, fila 2) es la misma imagen que la portada; usa otra foto.',
+    expect(errors).toEqual([
+      'Fotos, fila 2: "Foto" es la misma imagen que la portada (Servicios, fila 2); usa otra foto.',
     ]);
   });
 
-  it('detecta descripciones de foto que repiten el resumen', () => {
-    const result = parseServices(
+  it('marca en la fila de Fotos las descripciones que repiten el resumen o se repiten', () => {
+    const errors = errorsOf(
       [row(SERVICE_HEADERS), row(validService)],
       [
         row(PHOTO_HEADERS),
@@ -155,15 +182,34 @@ describe('parseServices', () => {
           'Fotos profesionales de tus desayunos para redes sociales.',
           '',
         ]),
+        row(['Fotografía de producto', ID_C, 'Bandeja de desayuno con globos dorados', '']),
       ],
     );
-    expect(result.errors).toEqual([
-      'Servicios, fila 2: "Descripción foto (Fotos, fila 2)" repite el resumen; describe lo que se ve en la foto.',
+    expect(errors).toEqual([
+      'Fotos, fila 2: "Descripción foto" repite el resumen del servicio; describe lo que se ve en la foto.',
+      'Fotos, fila 3: "Descripción foto" es igual a la de la portada (Servicios, fila 2); cada foto necesita su propia descripción.',
     ]);
   });
 
-  it('informa columnas faltantes', () => {
+  it('informa columnas faltantes como problema de toda la pestaña', () => {
     const result = parseServices([row(['Título'])], [row(PHOTO_HEADERS)]);
-    expect(result.errors[0]).toMatch(/faltan las columnas "resumen"/);
+    expect(result.problems[0]).toEqual({
+      sheet: 'Servicios',
+      message: expect.stringMatching(/faltan las columnas "resumen"/),
+    });
+  });
+
+  it('ignora las columnas de resultado al leer y al detectar filas vacías', () => {
+    const headers = [...SERVICE_HEADERS, 'Errores a corregir', 'Detalle error'];
+    const result = parseServices(
+      [
+        row(headers),
+        row([...validService, '⚠️ 1 error', '• algo']),
+        row([...validService.map(() => ''), '✅ Sin errores', '']),
+      ],
+      [row(PHOTO_HEADERS)],
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.rows).toBe(1);
   });
 });

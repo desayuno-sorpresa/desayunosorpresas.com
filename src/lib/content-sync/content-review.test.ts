@@ -57,30 +57,42 @@ describe('reviewAltTexts', () => {
     expect(
       reviewAltTexts(
         [
-          { label: 'Descripción portada', alt: 'Creación de página web' },
-          { label: 'Descripción foto (Fotos, fila 2)', alt: 'Una página web lista para ti.' },
+          { label: 'Descripción portada', origin: 'la portada', alt: 'Creación de página web' },
+          { label: 'Descripción foto', origin: 'la foto 2', alt: 'Una página web lista para ti.' },
         ],
         'Creación de página web',
         'Una página web lista para ti.',
       ),
     ).toEqual([
-      '"Descripción portada" repite el título; describe lo que se ve en la foto.',
-      '"Descripción foto (Fotos, fila 2)" repite el resumen; describe lo que se ve en la foto.',
+      {
+        index: 0,
+        message:
+          '"Descripción portada" repite el título del servicio; describe lo que se ve en la foto.',
+      },
+      {
+        index: 1,
+        message:
+          '"Descripción foto" repite el resumen del servicio; describe lo que se ve en la foto.',
+      },
     ]);
   });
 
-  it('rechaza descripciones repetidas entre fotos', () => {
+  it('rechaza descripciones repetidas entre fotos e indica cuál es la original', () => {
     expect(
       reviewAltTexts(
         [
-          { label: 'Descripción portada', alt: 'Caja con globos' },
-          { label: 'Descripción foto (Fotos, fila 3)', alt: 'caja con  globos' },
+          { label: 'Descripción portada', origin: 'la portada', alt: 'Caja con globos' },
+          { label: 'Descripción foto', origin: 'la foto 2', alt: 'caja con  globos' },
         ],
         'Título',
         'Resumen del servicio',
       ),
     ).toEqual([
-      '"Descripción foto (Fotos, fila 3)" es igual a "Descripción portada"; cada foto necesita su propia descripción.',
+      {
+        index: 1,
+        message:
+          '"Descripción foto" es igual a la de la portada; cada foto necesita su propia descripción.',
+      },
     ]);
   });
 });

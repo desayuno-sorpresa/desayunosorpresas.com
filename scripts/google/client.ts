@@ -1,8 +1,11 @@
-// Cliente mínimo de Google Sheets y Drive (solo lectura) sobre fetch nativo.
+// Cliente mínimo de Google Sheets (lectura y escritura de la revisión) y Drive (solo lectura).
 import type { SheetCell, SheetGrid } from '../../src/lib/content-sync/sheet.ts';
+import type { ColumnWrite } from '../../src/lib/content-sync/status.ts';
 
+// La hoja necesita escritura para las columnas "Errores a corregir" y "Detalle error";
+// las fotos de Drive solo se leen.
 export const SCOPES = [
-  'https://www.googleapis.com/auth/spreadsheets.readonly',
+  'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.readonly',
 ] as const;
 
@@ -16,6 +19,8 @@ export interface DriveFile {
 export interface ContentSource {
   readSheets(names: readonly string[]): Promise<Map<string, SheetGrid>>;
   downloadImage(fileId: string): Promise<DriveFile>;
+  /** Escribe columnas completas desde la fila 2 de una pestaña. */
+  writeColumns(sheet: string, writes: readonly ColumnWrite[]): Promise<void>;
 }
 
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
@@ -47,13 +52,22 @@ export function createGoogleSource(
 ): ContentSource {
   const headers = { Authorization: `Bearer ${accessToken}` };
 
-  async function request(url: string): Promise<Response> {
-    const response = await fetch(url, { headers });
+  const sheetsBase = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
+
+  async function request(url: string, init: RequestInit = {}): Promise<Response> {
+    const response = await fetch(url, {
+      ...init,
+      headers: { ...headers, ...(init.body ? { 'Content-Type': 'application/json' } : {}) },
+    });
     if (response.status === 403 || response.status === 404) {
-      const what = url.includes('sheets.googleapis.com') ? 'la hoja de cálculo' : 'una foto';
+      const what = url.startsWith(sheetsBase)
+        ? init.method === 'POST'
+          ? 'escribir en la hoja de cálculo'
+          : 'la hoja de cálculo'
+        : 'una foto';
       throw new Error(
-        `Sin acceso a ${what} (${response.status}). Comparte la hoja y la carpeta de fotos ` +
-          `como "Lector" con ${serviceAccountEmail}.`,
+        `Sin acceso a ${what} (${response.status}). Comparte la hoja de cálculo como "Editor" ` +
+          `y la carpeta de fotos como "Lector" con ${serviceAccountEmail}.`,
       );
     }
     if (!response.ok) {
@@ -70,9 +84,7 @@ export function createGoogleSource(
           'sheets(properties.title,data.rowData.values(formattedValue,hyperlink,chipRuns.chip.richLinkProperties.uri))',
       });
       for (const name of names) params.append('ranges', `'${name}'`);
-      const response = await request(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?${params}`,
-      );
+      const response = await request(`${sheetsBase}?${params}`);
       const body = (await response.json()) as SpreadsheetResponse;
       const result = new Map<string, SheetGrid>();
       for (const sheet of body.sheets ?? []) {
@@ -102,6 +114,20 @@ export function createGoogleSource(
         mimeType: meta.mimeType ?? '',
         bytes: new Uint8Array(await media.arrayBuffer()),
       };
+    },
+
+    async writeColumns(sheet, writes) {
+      const data = writes
+        .filter((write) => write.values.length > 0)
+        .map((write) => ({
+          range: `'${sheet}'!${write.column}2:${write.column}${write.values.length + 1}`,
+          values: write.values.map((value) => [value]),
+        }));
+      if (data.length === 0) return;
+      await request(`${sheetsBase}/values:batchUpdate`, {
+        method: 'POST',
+        body: JSON.stringify({ valueInputOption: 'RAW', data }),
+      });
     },
   };
 }

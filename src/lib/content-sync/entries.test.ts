@@ -9,8 +9,8 @@ const draft: ServiceDraft = {
   description: ['Uno.'],
   benefits: [],
   order: 1,
-  cover: { fileId: 'a', alt: 'Portada del servicio' },
-  gallery: [{ fileId: 'b', alt: 'Foto de la galería' }],
+  cover: { fileId: 'a', alt: 'Portada del servicio', source: { sheet: 'Servicios', row: 2 } },
+  gallery: [{ fileId: 'b', alt: 'Foto de la galería', source: { sheet: 'Fotos', row: 2 } }],
 };
 
 describe('imagePaths', () => {
