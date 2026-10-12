@@ -173,7 +173,7 @@ async function main(): Promise<void> {
   }
   const account = parseServiceAccount(credentials);
   const token = await getAccessToken(account, SCOPES);
-  const report = await runSync(createGoogleSource(spreadsheetId, token), {
+  const report = await runSync(createGoogleSource(spreadsheetId, token, account.clientEmail), {
     outDir: DEFAULT_OUT_DIR,
     today: todayInBogota(),
   });

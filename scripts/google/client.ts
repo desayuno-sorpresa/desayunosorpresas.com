@@ -40,11 +40,22 @@ function toCell(data: CellData): SheetCell {
   return { text: data.formattedValue ?? '', ...(link ? { link } : {}) };
 }
 
-export function createGoogleSource(spreadsheetId: string, accessToken: string): ContentSource {
+export function createGoogleSource(
+  spreadsheetId: string,
+  accessToken: string,
+  serviceAccountEmail: string,
+): ContentSource {
   const headers = { Authorization: `Bearer ${accessToken}` };
 
   async function request(url: string): Promise<Response> {
     const response = await fetch(url, { headers });
+    if (response.status === 403 || response.status === 404) {
+      const what = url.includes('sheets.googleapis.com') ? 'la hoja de cálculo' : 'una foto';
+      throw new Error(
+        `Sin acceso a ${what} (${response.status}). Comparte la hoja y la carpeta de fotos ` +
+          `como "Lector" con ${serviceAccountEmail}.`,
+      );
+    }
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(`Google respondió ${response.status} para ${url.split('?')[0]}: ${detail}`);
