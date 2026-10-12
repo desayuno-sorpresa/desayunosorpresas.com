@@ -12,8 +12,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Dominio: `https://desayunosorpresas.com` (dominio propio en GitHub Pages) → `site` fijo en `astro.config.mjs`, `base: '/'`. `BASE_PATH` solo se usa en local para detectar rutas absolutas escritas a mano (p. ej. `BASE_PATH=/prueba`).
 - Contacto: WhatsApp del administrador `+57 312 506 5058` y correo `desayunos.sorpresa.col@gmail.com` (en `src/config/site.ts`).
 - Sitemap (`@astrojs/sitemap`) y `robots.txt` (`src/pages/robots.txt.ts`) activos.
-- Marca: **Desayunos Sorpresa** (`siteConfig.brandName`). Cuenta de GitHub: `desayuno-sorpresa`.
-- **Pendiente, no inventar:** nombre del repositorio y remoto, textos definitivos de condiciones y política de datos, qué es exactamente *desayunosorpresacol*. `pnpm check:release` lista lo que falta y bloquea el despliegue.
+- Marca: **Desayunos Sorpresa** (`siteConfig.brandName`). Repositorio: `desayuno-sorpresa/desayunosorpresas.com` (público), Pages desde GitHub Actions con dominio propio.
+- Textos de condiciones y política de datos aprobados por el usuario el 2026-10-12 (`provisional: false`). Si se cambian por versiones no aprobadas, volver a `true`: `pnpm check:release` bloquea el despliegue.
+- **Pendiente, no inventar:** qué es exactamente *desayunosorpresacol*.
 
 Si una tarea depende de alguno de los datos pendientes, pregunta en lugar de suponer.
 

@@ -75,5 +75,5 @@ export const siteConfig: SiteConfig = {
       ],
     },
   ],
-  provisional: { conditions: true, privacy: true },
+  provisional: { conditions: false, privacy: false },
 };
