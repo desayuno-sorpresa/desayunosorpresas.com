@@ -1,3 +1,4 @@
+import { imageName, type CollectionParse, type DriveImageRef, type RowNote } from './collection.ts';
 import { reviewAltTexts, reviewTexts } from './content-review.ts';
 import { extractDriveFileId } from './drive.ts';
 import { SERVICE_LIMITS, SLUG_PATTERN } from './limits.ts';
@@ -17,13 +18,6 @@ const SERVICE_COLUMNS = [
 ] as const;
 const PHOTO_COLUMNS = ['servicio', 'foto', 'descripcion_foto'] as const;
 
-export interface DriveImageRef {
-  fileId: string;
-  alt: string;
-  /** Fila de la hoja donde está la foto (portada en Servicios, galería en Fotos). */
-  source: RowRef;
-}
-
 /** Servicio publicado tal como sale de la hoja, antes de descargar imágenes. */
 export interface ServiceDraft {
   slug: string;
@@ -36,27 +30,6 @@ export interface ServiceDraft {
   ctaLabel?: string;
   cover: DriveImageRef;
   gallery: DriveImageRef[];
-}
-
-/** Estado informativo de una fila que no se publica pero tampoco tiene errores. */
-export interface RowNote extends RowRef {
-  text: string;
-}
-
-export interface ParseResult {
-  services: ServiceDraft[];
-  problems: Problem[];
-  notes: RowNote[];
-  /** Filas con datos en la pestaña Servicios y cuántas están en borrador (para diagnóstico). */
-  rows: number;
-  drafts: number;
-}
-
-/** Cómo citar una foto desde otra fila: "la portada (Servicios, fila 2)". */
-export function photoName(ref: DriveImageRef): string {
-  return ref.source.sheet === SERVICES_SHEET
-    ? `la portada (${SERVICES_SHEET}, fila ${ref.source.row})`
-    : `la foto de ${PHOTOS_SHEET}, fila ${ref.source.row}`;
 }
 
 function driveId(cell: SheetCell): string | null {
@@ -82,7 +55,10 @@ function parseOrder(text: string, fallback: number): number | null {
  * Convierte las pestañas "Servicios" y "Fotos" en servicios publicados.
  * Las filas en estado "Borrador" no se publican ni se revisan (el repositorio es público).
  */
-export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): ParseResult {
+export function parseServices(
+  servicesGrid: SheetGrid,
+  photosGrid: SheetGrid,
+): CollectionParse<ServiceDraft> {
   const problems: Problem[] = [];
   const notes: RowNote[] = [];
   const servicesTable = readTable(SERVICES_SHEET, servicesGrid, SERVICE_COLUMNS);
@@ -232,7 +208,7 @@ export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): P
         problems.push(
           rowProblem(
             ref.source,
-            `"Foto" es la misma imagen que ${photoName(previous)}; usa otra foto.`,
+            `"Foto" es la misma imagen que ${imageName(previous)}; usa otra foto.`,
           ),
         );
       } else {
@@ -242,7 +218,7 @@ export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): P
     const altProblems = reviewAltTexts(
       images.map((ref) => ({
         label: ref.source.sheet === SERVICES_SHEET ? 'Descripción portada' : 'Descripción foto',
-        origin: photoName(ref),
+        origin: imageName(ref),
         alt: ref.alt,
       })),
       service.title,
@@ -255,7 +231,7 @@ export function parseServices(servicesGrid: SheetGrid, photosGrid: SheetGrid): P
   }
 
   return {
-    services: services.toSorted((a, b) => a.order - b.order),
+    items: services.toSorted((a, b) => a.order - b.order),
     problems,
     notes,
     rows: servicesTable.records.length,

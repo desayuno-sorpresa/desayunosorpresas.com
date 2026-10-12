@@ -1,4 +1,4 @@
-name: Sincronizar servicios desde Google Sheets
+name: Sincronizar contenido desde Google Sheets
 
 # Flujo semiautomático:
 # - Hoja sin errores y build válido → PR con merge automático → despliegue.
@@ -31,7 +31,7 @@ jobs:
       SPREADSHEET_ID: 1fhydjA3oUvsC8hRt0gOLEO5O9z_2mkQXUnNaABVQkjE
       BRANCH: sync/contenido
       ISSUE_LABEL: revision-contenido
-      ISSUE_TITLE: 'Revisión necesaria: errores en la hoja de servicios'
+      ISSUE_TITLE: 'Revisión necesaria: errores en la hoja de contenido'
       GH_TOKEN: ${{ github.token }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
@@ -43,7 +43,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      - name: Descargar servicios y fotos
+      - name: Descargar contenido e imágenes
         id: sync
         continue-on-error: true
         run: pnpm sync:content
@@ -57,7 +57,7 @@ jobs:
           PROBLEMS_FILE: ${{ runner.temp }}/problemas.md
         run: |
           gh label create "$ISSUE_LABEL" --color D93F0B \
-            --description "La hoja de servicios necesita corrección" --force
+            --description "La hoja de contenido necesita corrección" --force
           {
             echo "La sincronización con Google Sheets se detuvo y **no se publicó nada**."
             echo
@@ -81,7 +81,7 @@ jobs:
       - name: Detectar cambios
         id: diff
         run: |
-          if [ -z "$(git status --porcelain -- src/content/servicios)" ]; then
+          if [ -z "$(git status --porcelain -- src/content)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Sin cambios en Google Sheets." >> "$GITHUB_STEP_SUMMARY"
           else
@@ -102,8 +102,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -C "$BRANCH"
-          git add -A src/content/servicios
-          git commit -m "Actualizar servicios desde Google Sheets"
+          git add -A src/content
+          git commit -m "Actualizar contenido desde Google Sheets"
           git push --force origin "$BRANCH"
           {
             echo "Cambios descargados de Google Sheets el $(TZ=America/Bogota date '+%Y-%m-%d %H:%M')."
@@ -122,7 +122,7 @@ jobs:
             gh pr edit "$BRANCH" --body-file pr-body.md
           else
             gh pr create --base main --head "$BRANCH" \
-              --title "Actualizar servicios desde Google Sheets" --body-file pr-body.md
+              --title "Actualizar contenido desde Google Sheets" --body-file pr-body.md
           fi
           echo "url=$(gh pr view "$BRANCH" --json url --jq .url)" >> "$GITHUB_OUTPUT"
 

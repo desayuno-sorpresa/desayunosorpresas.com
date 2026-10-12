@@ -1,0 +1,92 @@
+---
+import type { ImageMetadata } from 'astro';
+import { Image } from 'astro:assets';
+
+interface Props {
+  name: string;
+  summary: string;
+  city: string;
+  url: string;
+  image: ImageMetadata;
+  imageAlt: string;
+  /** Nivel del título según la página: 2 en el directorio, 3 dentro de una sección. */
+  headingLevel: 2 | 3;
+}
+
+const { name, summary, city, url, image, imageAlt, headingLevel } = Astro.props;
+const Heading = headingLevel === 2 ? 'h2' : 'h3';
+---
+
+<article class="business-card">
+  <Image
+    src={image}
+    alt={imageAlt}
+    widths={[320, 640]}
+    sizes="(min-width: 60rem) 20rem, (min-width: 40rem) 45vw, 85vw"
+    loading="lazy"
+  />
+  <div class="business-card__body">
+    <Heading class="business-card__name">{name}</Heading>
+    <p class="business-card__city">{city}</p>
+    <p>{summary}</p>
+    <a class="button business-card__link" href={url} target="_blank" rel="noopener noreferrer">
+      Visitar página
+      <span class="visually-hidden">{` de ${name} (se abre en una pestaña nueva)`}</span>
+      <span aria-hidden="true"> ↗</span>
+    </a>
+  </div>
+</article>
+
+<style>
+  .business-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  .business-card img {
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
+  }
+
+  .business-card__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-2);
+  }
+
+  .business-card__body p {
+    margin: 0;
+  }
+
+  .business-card__name {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  .business-card__city {
+    color: var(--color-muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  .business-card__link {
+    align-self: flex-start;
+    margin-top: auto;
+  }
+
+  /* Toda la tarjeta es clicable sin anidar enlaces. */
+  .business-card__link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+</style>

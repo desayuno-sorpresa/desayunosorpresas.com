@@ -57,7 +57,7 @@ describe('parseServices', () => {
       ],
     );
     expect(result.problems).toEqual([]);
-    expect(result.services).toEqual([
+    expect(result.items).toEqual([
       {
         slug: 'fotografia-de-producto',
         title: 'Fotografía de producto',
@@ -93,7 +93,7 @@ describe('parseServices', () => {
     const cells = row(service);
     cells[9] = { text: 'portada.jpg', link: link(ID_B) };
     const result = parseServices([row(SERVICE_HEADERS), cells], [row(PHOTO_HEADERS)]);
-    expect(result.services[0]?.cover.fileId).toBe(ID_B);
+    expect(result.items[0]?.cover.fileId).toBe(ID_B);
   });
 
   it('ignora borradores y sus fotos sin errores, con una nota por fila', () => {
@@ -104,7 +104,7 @@ describe('parseServices', () => {
       [row(PHOTO_HEADERS), row(['Fotografía de producto', ID_B, 'Una foto de ejemplo', ''])],
     );
     expect(result).toEqual({
-      services: [],
+      items: [],
       problems: [],
       notes: [
         { sheet: 'Servicios', row: 2, text: 'Borrador: no se publica ni se revisa' },
@@ -122,7 +122,7 @@ describe('parseServices', () => {
     invalid[9] = 'foto.jpg';
     invalid[10] = '';
     const result = parseServices([row(SERVICE_HEADERS), row(invalid)], [row(PHOTO_HEADERS)]);
-    expect(result.services).toEqual([]);
+    expect(result.items).toEqual([]);
     expect(result.problems.map(formatProblem)).toEqual([
       'Servicios, fila 2: "Resumen" es demasiado corto (mínimo 10 caracteres).',
       'Servicios, fila 2: "Precio desde" debe ser un número, p. ej. 150000.',
@@ -151,7 +151,7 @@ describe('parseServices', () => {
     const promising = [...validService];
     promising[3] = 'Visibilidad mayor en google.';
     const result = parseServices([row(SERVICE_HEADERS), row(promising)], [row(PHOTO_HEADERS)]);
-    expect(result.services).toEqual([]);
+    expect(result.items).toEqual([]);
     expect(result.problems.map(formatProblem)).toEqual([
       'Servicios, fila 2: "Descripción" promete resultados en Google o buscadores; no se pueden asegurar.',
       'Servicios, fila 2: "Descripción" escribe la marca como "Google".',

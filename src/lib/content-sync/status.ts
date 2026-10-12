@@ -1,5 +1,5 @@
 import type { Problem, SheetName } from './problems.ts';
-import type { RowNote } from './services.ts';
+import type { RowNote } from './collection.ts';
 import { DETAIL_COLUMN, headerNames, isEmptyRow, STATUS_COLUMN, type SheetGrid } from './sheet.ts';
 
 /** Valores de una columna desde la fila 2 hasta la última fila con datos. */
@@ -36,7 +36,9 @@ export function buildStatusWrites(
 
   const own = problems.filter((problem) => problem.sheet === sheet);
   // Problemas de toda la pestaña (p. ej. columnas faltantes) se muestran en cada fila.
-  const sheetWide = own.filter((problem) => problem.row === undefined).map((p) => p.message);
+  const sheetWide = own
+    .filter((problem) => problem.row === undefined && !problem.warning)
+    .map((problem) => problem.message);
   const status: string[] = [];
   const detail: string[] = [];
 
@@ -47,15 +49,25 @@ export function buildStatusWrites(
       detail.push('');
       return;
     }
-    const messages = [
+    const inRow = own.filter((problem) => problem.row === row);
+    const errors = [
       ...sheetWide,
-      ...own.filter((problem) => problem.row === row).map((problem) => problem.message),
+      ...inRow.filter((problem) => !problem.warning).map((problem) => problem.message),
     ];
+    const warnings = inRow.filter((problem) => problem.warning).map((problem) => problem.message);
+    const lines = [
+      ...errors.map((message) => `• ${message}`),
+      ...warnings.map((message) => `• Aviso: ${message}`),
+    ].join('\n');
     const note = notes.find((item) => item.sheet === sheet && item.row === row);
-    if (messages.length > 0) {
-      const count = messages.length === 1 ? '1 error' : `${messages.length} errores`;
+    if (errors.length > 0) {
+      const count = errors.length === 1 ? '1 error' : `${errors.length} errores`;
       status.push(`⚠️ ${count} · revisado ${reviewedAt}`);
-      detail.push(messages.map((message) => `• ${message}`).join('\n'));
+      detail.push(lines);
+    } else if (warnings.length > 0) {
+      const count = warnings.length === 1 ? '1 aviso' : `${warnings.length} avisos`;
+      status.push(`🟡 ${count} (no bloquea) · revisado ${reviewedAt}`);
+      detail.push(lines);
     } else if (note) {
       status.push(`${note.text} · revisado ${reviewedAt}`);
       detail.push('');

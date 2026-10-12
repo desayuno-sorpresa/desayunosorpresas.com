@@ -7,3 +7,9 @@ export const SERVICE_LIMITS = {
 } as const;
 
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export const BUSINESS_LIMITS = {
+  name: { min: 2, max: 80 },
+  summary: { min: 10, max: 160 },
+  city: { min: 2, max: 60 },
+} as const;

@@ -1,0 +1,72 @@
+---
+import { getCollection } from 'astro:content';
+import BusinessCard from '@/components/BusinessCard.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { visibleItems } from '@/lib/publishing';
+import { withBase } from '@/lib/url';
+
+const businesses = visibleItems(
+  (await getCollection('negocios')).map((entry) => ({ id: entry.id, ...entry.data })),
+  false,
+);
+// Solo datos visibles en la página: nombre y enlace de cada negocio.
+const jsonLd =
+  businesses.length > 0
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'ItemList',
+        name: 'Negocios de desayunos sorpresa',
+        itemListElement: businesses.map((business, index) => ({
+          '@type': 'ListItem',
+          position: index + 1,
+          item: { '@type': 'Organization', name: business.name, url: business.url },
+        })),
+      }
+    : undefined;
+---
+
+<BaseLayout
+  title="Negocios"
+  description="Negocios de desayunos sorpresa suscritos: conoce sus propuestas y visita sus páginas."
+  {...(jsonLd ? { jsonLd } : {})}
+>
+  <section class="section container">
+    <h1>Negocios de desayunos sorpresa</h1>
+    <p class="lead">
+      Conoce los negocios suscritos y visita sus páginas para ver sus desayunos y hacer tu pedido.
+    </p>
+    {businesses.length === 0 ? (
+      <p class="notice">
+        Pronto publicaremos los negocios suscritos. ¿Tienes un negocio de desayunos sorpresa?{' '}
+        <a href={withBase('#solicitud')}>Solicita tu ingreso al grupo de negocios</a>.
+      </p>
+    ) : (
+      <ul class="businesses">
+        {businesses.map((business) => (
+          <li>
+            <BusinessCard
+              name={business.name}
+              summary={business.summary}
+              city={business.city}
+              url={business.url}
+              image={business.image}
+              imageAlt={business.imageAlt}
+              headingLevel={2}
+            />
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+</BaseLayout>
+
+<style>
+  .businesses {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+</style>

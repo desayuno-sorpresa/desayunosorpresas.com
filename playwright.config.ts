@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /*
- * Las pruebas corren contra `preview` con la base real ('/', dominio propio).
- * SHOW_DRAFTS=true incluye los servicios de ejemplo.
+ * Las pruebas corren contra `preview` con la base real ('/', dominio propio) y con datos
+ * fijos de tests/fixtures/content (CONTENT_DIR), independientes de la hoja de Google.
  */
 const PORT = 4321;
 
@@ -21,7 +21,7 @@ export default defineConfig({
   ],
   webServer: {
     command: `astro build && astro preview --port ${PORT} --ignore-lock`,
-    env: { SHOW_DRAFTS: 'true' },
+    env: { CONTENT_DIR: 'tests/fixtures/content' },
     url: `http://localhost:${PORT}/`,
     reuseExistingServer: !process.env['CI'],
     timeout: 120_000,

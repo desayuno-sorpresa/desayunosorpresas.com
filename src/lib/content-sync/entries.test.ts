@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildEntry, imagePaths } from './entries';
+import { buildServiceEntry, serviceImages } from './entries';
 import type { ServiceDraft } from './services';
 
 const draft: ServiceDraft = {
@@ -13,16 +13,16 @@ const draft: ServiceDraft = {
   gallery: [{ fileId: 'b', alt: 'Foto de la galería', source: { sheet: 'Fotos', row: 2 } }],
 };
 
-describe('imagePaths', () => {
-  it('numera portada y galería', () => {
-    expect(imagePaths(draft)).toEqual({ cover: './fotos/01.webp', gallery: ['./fotos/02.webp'] });
+describe('serviceImages', () => {
+  it('pone la portada primero y luego la galería', () => {
+    expect(serviceImages(draft).map((ref) => ref.fileId)).toEqual(['a', 'b']);
   });
 });
 
-describe('buildEntry', () => {
-  const first = buildEntry(draft, undefined, true, '2026-10-12');
+describe('buildServiceEntry', () => {
+  const first = buildServiceEntry(draft, undefined, true, '2026-10-12');
 
-  it('construye la entrada con la fecha de hoy si es nueva', () => {
+  it('construye la entrada con portada 01 y galería desde 02', () => {
     expect(first).toMatchObject({
       id: 'fotos',
       status: 'publicado',
@@ -33,14 +33,11 @@ describe('buildEntry', () => {
     expect(first).not.toHaveProperty('priceFrom');
   });
 
-  it('conserva la fecha si nada cambió', () => {
-    expect(buildEntry(draft, first, false, '2026-11-01').updatedAt).toBe('2026-10-12');
-  });
-
-  it('actualiza la fecha si cambian los datos o las imágenes', () => {
-    expect(buildEntry({ ...draft, title: 'Otro' }, first, false, '2026-11-01').updatedAt).toBe(
-      '2026-11-01',
-    );
-    expect(buildEntry(draft, first, true, '2026-11-01').updatedAt).toBe('2026-11-01');
+  it('conserva la fecha si nada cambió y la actualiza si cambian datos o imágenes', () => {
+    expect(buildServiceEntry(draft, first, false, '2026-11-01').updatedAt).toBe('2026-10-12');
+    expect(
+      buildServiceEntry({ ...draft, title: 'Otro' }, first, false, '2026-11-01').updatedAt,
+    ).toBe('2026-11-01');
+    expect(buildServiceEntry(draft, first, true, '2026-11-01').updatedAt).toBe('2026-11-01');
   });
 });

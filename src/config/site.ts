@@ -47,6 +47,7 @@ export const siteConfig: SiteConfig = {
   nav: [
     { label: 'Inicio', path: '' },
     { label: 'Servicios', path: 'servicios/' },
+    { label: 'Negocios', path: 'negocios/' },
     { label: 'Condiciones', path: 'condiciones/' },
   ],
   groups: [

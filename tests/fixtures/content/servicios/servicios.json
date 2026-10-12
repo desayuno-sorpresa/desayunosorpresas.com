@@ -1,0 +1,15 @@
+[
+  {
+    "id": "servicio-de-prueba",
+    "title": "Servicio de prueba",
+    "summary": "Servicio ficticio usado solo en las pruebas automáticas.",
+    "description": ["Contenido ficticio para pruebas."],
+    "benefits": ["Beneficio de prueba"],
+    "order": 1,
+    "status": "publicado",
+    "cover": "./servicio-de-prueba/01.webp",
+    "coverAlt": "Rectángulo amarillo de prueba",
+    "gallery": [],
+    "updatedAt": "2026-10-12"
+  }
+]

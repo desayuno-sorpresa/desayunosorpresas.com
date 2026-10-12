@@ -79,14 +79,21 @@ export function createGoogleSource(
 
   return {
     async readSheets(names) {
+      // Pedir una pestaña inexistente hace fallar toda la consulta: primero se listan.
+      const meta = await request(`${sheetsBase}?fields=sheets.properties.title`);
+      const metaBody = (await meta.json()) as SpreadsheetResponse;
+      const existing = new Set((metaBody.sheets ?? []).map((sheet) => sheet.properties?.title));
+      const wanted = names.filter((name) => existing.has(name));
+      const result = new Map<string, SheetGrid>();
+      if (wanted.length === 0) return result;
+
       const params = new URLSearchParams({
         fields:
           'sheets(properties.title,data.rowData.values(formattedValue,hyperlink,chipRuns.chip.richLinkProperties.uri))',
       });
-      for (const name of names) params.append('ranges', `'${name}'`);
+      for (const name of wanted) params.append('ranges', `'${name}'`);
       const response = await request(`${sheetsBase}?${params}`);
       const body = (await response.json()) as SpreadsheetResponse;
-      const result = new Map<string, SheetGrid>();
       for (const sheet of body.sheets ?? []) {
         const title = sheet.properties?.title ?? '';
         const rows = (sheet.data?.[0]?.rowData ?? []).map((row) => (row.values ?? []).map(toCell));

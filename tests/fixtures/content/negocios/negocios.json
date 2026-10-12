@@ -1,0 +1,80 @@
+[
+  {
+    "id": "negocio-uno",
+    "name": "Negocio Uno",
+    "url": "https://negocio-uno.example.com/",
+    "summary": "Negocio ficticio número 1 para pruebas.",
+    "city": "Ciudad de prueba",
+    "image": "./negocio-uno/01.webp",
+    "imageAlt": "Rectángulo de color de prueba 1",
+    "featured": true,
+    "order": 1,
+    "status": "publicado",
+    "updatedAt": "2026-10-12"
+  },
+  {
+    "id": "negocio-dos",
+    "name": "Negocio Dos",
+    "url": "https://negocio-dos.example.com/",
+    "summary": "Negocio ficticio número 2 para pruebas.",
+    "city": "Ciudad de prueba",
+    "image": "./negocio-dos/01.webp",
+    "imageAlt": "Rectángulo de color de prueba 2",
+    "featured": true,
+    "order": 2,
+    "status": "publicado",
+    "updatedAt": "2026-10-12"
+  },
+  {
+    "id": "negocio-tres",
+    "name": "Negocio Tres",
+    "url": "https://negocio-tres.example.com/",
+    "summary": "Negocio ficticio número 3 para pruebas.",
+    "city": "Ciudad de prueba",
+    "image": "./negocio-tres/01.webp",
+    "imageAlt": "Rectángulo de color de prueba 3",
+    "featured": true,
+    "order": 3,
+    "status": "publicado",
+    "updatedAt": "2026-10-12"
+  },
+  {
+    "id": "negocio-cuatro",
+    "name": "Negocio Cuatro",
+    "url": "https://negocio-cuatro.example.com/",
+    "summary": "Negocio ficticio número 4 para pruebas.",
+    "city": "Ciudad de prueba",
+    "image": "./negocio-cuatro/01.webp",
+    "imageAlt": "Rectángulo de color de prueba 4",
+    "featured": true,
+    "order": 4,
+    "status": "publicado",
+    "updatedAt": "2026-10-12"
+  },
+  {
+    "id": "negocio-cinco",
+    "name": "Negocio Cinco",
+    "url": "https://negocio-cinco.example.com/",
+    "summary": "Negocio ficticio número 5 para pruebas.",
+    "city": "Ciudad de prueba",
+    "image": "./negocio-cinco/01.webp",
+    "imageAlt": "Rectángulo de color de prueba 5",
+    "featured": true,
+    "order": 5,
+    "status": "publicado",
+    "updatedAt": "2026-10-12"
+  },
+  {
+    "id": "negocio-seis",
+    "name": "Negocio Seis",
+    "url": "https://negocio-seis.example.com/",
+    "summary": "Negocio ficticio número 6 para pruebas.",
+    "city": "Ciudad de prueba",
+    "image": "./negocio-seis/01.webp",
+    "imageAlt": "Rectángulo de color de prueba 6",
+    "featured": false,
+    "order": 6,
+    "status": "publicado",
+    "updatedAt": "2026-10-12"
+  }
+]

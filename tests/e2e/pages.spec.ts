@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test';
 const PAGES = [
   { path: './', h1: 'Servicios y comunidad para negocios de desayunos sorpresa' },
   { path: 'servicios/', h1: 'Servicios para tu negocio' },
+  { path: 'negocios/', h1: 'Negocios de desayunos sorpresa' },
   { path: 'condiciones/', h1: 'Condiciones de los grupos' },
   { path: 'privacidad/', h1: 'Tratamiento de datos personales' },
 ] as const;

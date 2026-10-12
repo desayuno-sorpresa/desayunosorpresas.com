@@ -72,6 +72,38 @@ describe('buildStatusWrites', () => {
     expect(writes?.[1]?.values).toEqual(['• Faltan columnas.', '• Faltan columnas.']);
   });
 
+  it('muestra avisos que no bloquean, y los errores tienen prioridad', () => {
+    const businesses = [
+      cells(['Nombre', 'Errores a corregir', 'Detalle error']),
+      cells(['Solo aviso']),
+      cells(['Error y aviso']),
+    ];
+    const writes = buildStatusWrites(
+      'Negocios',
+      businesses,
+      [
+        { sheet: 'Negocios', row: 2, warning: true, message: '"Enlace": la página no responde.' },
+        { sheet: 'Negocios', row: 3, warning: true, message: '"Enlace": la página no responde.' },
+        { sheet: 'Negocios', row: 3, message: '"Ciudad" es demasiado corto.' },
+      ],
+      [],
+      AT,
+    );
+    expect(writes).toEqual([
+      {
+        column: 'B',
+        values: [`🟡 1 aviso (no bloquea) · revisado ${AT}`, `⚠️ 1 error · revisado ${AT}`],
+      },
+      {
+        column: 'C',
+        values: [
+          '• Aviso: "Enlace": la página no responde.',
+          '• "Ciudad" es demasiado corto.\n• Aviso: "Enlace": la página no responde.',
+        ],
+      },
+    ]);
+  });
+
   it('devuelve null si faltan las columnas de resultado', () => {
     expect(buildStatusWrites('Fotos', [cells(['Servicio', 'Foto'])], [], [], AT)).toBeNull();
   });

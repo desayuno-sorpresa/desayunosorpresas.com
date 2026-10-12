@@ -1,25 +1,36 @@
 import { defineCollection } from 'astro:content';
 import { file } from 'astro/loaders';
 import { z } from 'astro/zod';
-import { SERVICE_LIMITS as L, SLUG_PATTERN } from '@/lib/content-sync/limits';
+import { BUSINESS_LIMITS as B, SERVICE_LIMITS as L, SLUG_PATTERN } from '@/lib/content-sync/limits';
+import { parseHttpsUrl } from '@/lib/content-sync/links';
 
 /*
- * Servicios: el JSON y sus imágenes los genera `pnpm sync:content` (scripts/sync-content.ts)
- * a partir de Google Sheets + Google Drive. No editar a mano: el próximo sync lo sobrescribe.
+ * El JSON y las imágenes de cada colección los genera `pnpm sync:content`
+ * (scripts/sync-content.ts) a partir de Google Sheets + Google Drive.
+ * No editar a mano: el próximo sync lo sobrescribe.
+ *
+ * CONTENT_DIR permite compilar con datos de prueba fijos (tests/fixtures/content) en e2e.
  */
-const servicios = defineCollection({
-  loader: file('src/content/servicios/servicios.json', {
-    parser: (text) => {
-      const entries: unknown = JSON.parse(text);
-      if (!Array.isArray(entries)) throw new Error('servicios.json debe ser una lista.');
-      for (const entry of entries) {
-        const id: unknown = entry?.id;
-        if (typeof id !== 'string' || !SLUG_PATTERN.test(id)) {
-          throw new Error(`Identificador de servicio no válido: ${JSON.stringify(id)}`);
-        }
+const CONTENT_DIR = process.env['CONTENT_DIR'] || 'src/content';
+
+/** Lista JSON cuyos `id` son aptos para URL. */
+function listWithSlugIds(name: string) {
+  return (text: string) => {
+    const entries: unknown = JSON.parse(text);
+    if (!Array.isArray(entries)) throw new Error(`${name}.json debe ser una lista.`);
+    for (const entry of entries) {
+      const id: unknown = entry?.id;
+      if (typeof id !== 'string' || !SLUG_PATTERN.test(id)) {
+        throw new Error(`Identificador no válido en ${name}.json: ${JSON.stringify(id)}`);
       }
-      return entries;
-    },
+    }
+    return entries;
+  };
+}
+
+const servicios = defineCollection({
+  loader: file(`${CONTENT_DIR}/servicios/servicios.json`, {
+    parser: listWithSlugIds('servicios'),
   }),
   schema: ({ image }) =>
     z.object({
@@ -38,4 +49,25 @@ const servicios = defineCollection({
     }),
 });
 
-export const collections = { servicios };
+const negocios = defineCollection({
+  loader: file(`${CONTENT_DIR}/negocios/negocios.json`, {
+    parser: listWithSlugIds('negocios'),
+  }),
+  schema: ({ image }) =>
+    z.object({
+      name: z.string().min(B.name.min).max(B.name.max),
+      url: z
+        .string()
+        .refine((value) => parseHttpsUrl(value).ok, 'Debe ser un enlace https:// válido.'),
+      summary: z.string().min(B.summary.min).max(B.summary.max),
+      city: z.string().min(B.city.min).max(B.city.max),
+      image: image(),
+      imageAlt: z.string().min(L.altMin),
+      featured: z.boolean(),
+      order: z.number().int(),
+      status: z.literal('publicado'),
+      updatedAt: z.coerce.date(),
+    }),
+});
+
+export const collections = { servicios, negocios };

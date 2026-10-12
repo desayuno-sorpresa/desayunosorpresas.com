@@ -1,48 +1,73 @@
-// Sincroniza los servicios desde Google Sheets + Drive hacia src/content/servicios/.
+// Sincroniza el contenido (servicios y negocios) desde Google Sheets + Drive hacia src/content/.
 // Uso: GOOGLE_SERVICE_ACCOUNT_JSON='…' SPREADSHEET_ID='…' pnpm sync:content
 import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import { buildEntry, imagePaths, type ServiceEntry } from '../src/lib/content-sync/entries.ts';
 import {
-  formatProblem,
-  rowProblem,
-  type Problem,
-  type SheetName,
-} from '../src/lib/content-sync/problems.ts';
+  buildBusinessEntry,
+  businessImages,
+  parseBusinesses,
+  type BusinessDraft,
+  type BusinessEntry,
+} from '../src/lib/content-sync/businesses.ts';
 import {
-  parseServices,
-  photoName,
-  PHOTOS_SHEET,
-  SERVICES_SHEET,
+  imageFiles,
+  imageName,
+  type CollectionParse,
   type DriveImageRef,
   type RowNote,
-} from '../src/lib/content-sync/services.ts';
+} from '../src/lib/content-sync/collection.ts';
+import {
+  buildServiceEntry,
+  serviceImages,
+  type ServiceEntry,
+} from '../src/lib/content-sync/entries.ts';
+import {
+  ALL_SHEETS,
+  BUSINESSES_SHEET,
+  formatProblem,
+  isBlocking,
+  PHOTOS_SHEET,
+  rowProblem,
+  rowWarning,
+  SERVICES_SHEET,
+  type Problem,
+} from '../src/lib/content-sync/problems.ts';
+import { parseServices, type ServiceDraft } from '../src/lib/content-sync/services.ts';
 import type { SheetGrid } from '../src/lib/content-sync/sheet.ts';
 import { buildStatusWrites } from '../src/lib/content-sync/status.ts';
 import { getAccessToken, parseServiceAccount } from './google/auth.ts';
 import { createGoogleSource, SCOPES, type ContentSource } from './google/client.ts';
 
-export const DEFAULT_OUT_DIR = 'src/content/servicios';
-const JSON_FILE = 'servicios.json';
+export const DEFAULT_CONTENT_DIR = 'src/content';
 const SUPPORTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
 
+/** Devuelve el motivo si el enlace no responde, o `null` si responde. */
+export type LinkChecker = (url: string) => Promise<string | null>;
+
 export interface SyncOptions {
-  outDir: string;
-  /** Fecha YYYY-MM-DD para servicios nuevos o modificados. */
+  /** Carpeta con una subcarpeta por colección (`servicios/`, `negocios/`). */
+  contentDir: string;
+  /** Fecha YYYY-MM-DD para elementos nuevos o modificados. */
   today: string;
   /** Fecha y hora que se anota en la hoja junto al resultado de la revisión. */
   reviewedAt: string;
+  checkLink: LinkChecker;
+}
+
+export interface CollectionReport {
+  name: string;
+  rows: number;
+  drafts: number;
+  published: number;
+  images: number;
 }
 
 export interface SyncReport {
-  /** Avisos que no bloquean la publicación (p. ej. no se pudo escribir la revisión). */
+  /** Avisos que no bloquean la publicación. */
   warnings: string[];
-  rows: number;
-  drafts: number;
-  services: number;
-  images: number;
+  collections: CollectionReport[];
   changed: boolean;
 }
 
@@ -51,10 +76,20 @@ export class SyncError extends Error {
   readonly warnings: readonly string[];
 
   constructor(problems: readonly Problem[], warnings: readonly string[] = []) {
-    super(`La hoja tiene ${problems.length} problema(s).`);
+    super(`La hoja tiene ${problems.filter(isBlocking).length} error(es).`);
     this.problems = problems;
     this.warnings = warnings;
   }
+}
+
+/** Cómo se lee, se nombra y se escribe cada colección. */
+interface CollectionSpec<T, E extends { id: string; updatedAt: string }> {
+  /** Subcarpeta y nombre del JSON (`servicios` → `servicios/servicios.json`). */
+  name: string;
+  parsed: CollectionParse<T>;
+  id(item: T): string;
+  images(item: T): DriveImageRef[];
+  entry(item: T, previous: E | undefined, imagesChanged: boolean, today: string): E;
 }
 
 /** Foto de Drive → WebP sin metadatos (EXIF/GPS), orientación corregida, máx. 2000 px. */
@@ -74,15 +109,6 @@ async function toWebp(ref: DriveImageRef, source: ContentSource): Promise<Uint8A
   return new Uint8Array(output);
 }
 
-async function readPrevious(file: string): Promise<Map<string, ServiceEntry>> {
-  try {
-    const entries = JSON.parse(await readFile(file, 'utf8')) as ServiceEntry[];
-    return new Map(entries.map((entry) => [entry.id, entry]));
-  } catch {
-    return new Map();
-  }
-}
-
 async function readIfExists(file: string): Promise<Uint8Array | null> {
   try {
     return new Uint8Array(await readFile(file));
@@ -93,6 +119,70 @@ async function readIfExists(file: string): Promise<Uint8Array | null> {
 
 function sameBytes(a: Uint8Array | null, b: Uint8Array): boolean {
   return a !== null && Buffer.from(a).equals(Buffer.from(b));
+}
+
+/**
+ * Descarga y convierte las imágenes de cada elemento. Los fallos y las imágenes idénticas
+ * dentro del mismo elemento se devuelven como problemas en la fila de la imagen.
+ */
+async function renderImages<T>(
+  items: readonly T[],
+  id: (item: T) => string,
+  images: (item: T) => DriveImageRef[],
+  source: ContentSource,
+): Promise<{ rendered: Map<string, Uint8Array[]>; problems: Problem[] }> {
+  const rendered = new Map<string, Uint8Array[]>();
+  const problems: Problem[] = [];
+  for (const item of items) {
+    const refs = images(item);
+    const bytes: Uint8Array[] = [];
+    for (const ref of refs) {
+      try {
+        bytes.push(await toWebp(ref, source));
+      } catch (error) {
+        problems.push(rowProblem(ref.source, `"Foto": ${(error as Error).message}`));
+      }
+    }
+    rendered.set(id(item), bytes);
+    // Solo si todas se descargaron; si no, los índices no corresponden a las filas.
+    if (bytes.length !== refs.length) continue;
+    bytes.forEach((image, index) => {
+      const twin = bytes.findIndex(
+        (other, otherIndex) => otherIndex < index && sameBytes(other, image),
+      );
+      const ref = refs[index];
+      const original = refs[twin];
+      if (twin !== -1 && ref && original) {
+        problems.push(
+          rowProblem(
+            ref.source,
+            `"Foto" es idéntica a ${imageName(original)} (mismo archivo subido dos veces); usa otra foto.`,
+          ),
+        );
+      }
+    });
+  }
+  return { rendered, problems };
+}
+
+/** Avisa (sin bloquear) de los enlaces externos que no responden. */
+async function checkBusinessLinks(
+  businesses: readonly BusinessDraft[],
+  checkLink: LinkChecker,
+): Promise<Problem[]> {
+  const warnings: Problem[] = [];
+  for (const business of businesses) {
+    const reason = await checkLink(business.url);
+    if (reason !== null) {
+      warnings.push(
+        rowWarning(
+          business.image.source,
+          `"Enlace": la página no responde (${reason}); revisa que esté publicada.`,
+        ),
+      );
+    }
+  }
+  return warnings;
 }
 
 /**
@@ -107,7 +197,7 @@ async function writeReview(
   reviewedAt: string,
 ): Promise<string[]> {
   const warnings: string[] = [];
-  for (const sheet of [SERVICES_SHEET, PHOTOS_SHEET] satisfies SheetName[]) {
+  for (const sheet of ALL_SHEETS) {
     const grid = sheets.get(sheet);
     if (!grid) continue;
     const writes = buildStatusWrites(sheet, grid, problems, notes, reviewedAt);
@@ -126,111 +216,147 @@ async function writeReview(
   return warnings;
 }
 
-export async function runSync(source: ContentSource, options: SyncOptions): Promise<SyncReport> {
-  const sheets = await source.readSheets([SERVICES_SHEET, PHOTOS_SHEET]);
-  const { services, problems, notes, rows, drafts } = parseServices(
-    sheets.get(SERVICES_SHEET) ?? [],
-    sheets.get(PHOTOS_SHEET) ?? [],
-  );
-  for (const sheet of [PHOTOS_SHEET, SERVICES_SHEET]) {
-    if (!sheets.has(sheet)) problems.unshift({ message: `Falta la pestaña "${sheet}".` });
-  }
-
-  // Descarga y convierte todo antes de tocar el disco: si algo falla, no queda a medias.
-  const rendered = new Map<string, Uint8Array[]>();
-  if (problems.length === 0) {
-    for (const service of services) {
-      const refs = [service.cover, ...service.gallery];
-      const images: Uint8Array[] = [];
-      for (const ref of refs) {
-        try {
-          images.push(await toWebp(ref, source));
-        } catch (error) {
-          problems.push(rowProblem(ref.source, `"Foto": ${(error as Error).message}`));
-        }
-      }
-      rendered.set(service.slug, images);
-
-      // La misma foto subida dos veces a Drive (enlaces distintos, imagen idéntica).
-      // Solo si todas se descargaron; si no, los índices no corresponden a las filas.
-      if (images.length !== refs.length) continue;
-      images.forEach((image, index) => {
-        const twin = images.findIndex(
-          (other, otherIndex) => otherIndex < index && sameBytes(other, image),
-        );
-        const ref = refs[index];
-        const original = refs[twin];
-        if (twin !== -1 && ref && original) {
-          problems.push(
-            rowProblem(
-              ref.source,
-              `"Foto" es idéntica a ${photoName(original)} (mismo archivo subido dos veces); usa otra foto.`,
-            ),
-          );
-        }
-      });
-    }
-  }
-
-  const warnings = await writeReview(source, sheets, problems, notes, options.reviewedAt);
-  if (problems.length > 0) throw new SyncError(problems, warnings);
-
-  const jsonPath = path.join(options.outDir, JSON_FILE);
-  const previous = await readPrevious(jsonPath);
+/** Escribe el JSON y las imágenes de una colección solo si cambiaron. */
+async function writeCollection<T, E extends { id: string; updatedAt: string }>(
+  spec: CollectionSpec<T, E>,
+  rendered: Map<string, Uint8Array[]>,
+  options: SyncOptions,
+): Promise<{ changed: boolean; images: number }> {
+  const dir = path.join(options.contentDir, spec.name);
+  const jsonPath = path.join(dir, `${spec.name}.json`);
   const previousJson = await readFile(jsonPath, 'utf8').catch(() => '');
+  let previous = new Map<string, E>();
+  try {
+    const parsed = JSON.parse(previousJson) as E[];
+    previous = new Map(parsed.map((entry) => [entry.id, entry]));
+  } catch {
+    // Sin JSON previo: todo es nuevo.
+  }
+
   let changed = false;
   let imageCount = 0;
-  const entries: ServiceEntry[] = [];
-
-  for (const service of services) {
-    const paths = imagePaths(service);
-    const files = [paths.cover, ...paths.gallery];
-    const images = rendered.get(service.slug) ?? [];
-    const serviceDir = path.join(options.outDir, service.slug);
-    let imagesChanged = false;
-
-    // Comparar con lo existente también detecta fotos sobrantes de una versión anterior.
-    const existingFiles = await readdir(serviceDir).catch(() => [] as string[]);
-    const expectedNames = new Set(files.map((file) => path.basename(file)));
-    if (existingFiles.some((name) => !expectedNames.has(name))) imagesChanged = true;
-
+  const entries: E[] = [];
+  for (const item of spec.parsed.items) {
+    const id = spec.id(item);
+    const images = rendered.get(id) ?? [];
+    const files = imageFiles(id, spec.images(item).length);
+    const itemDir = path.join(dir, id);
+    // Comparar con lo existente también detecta imágenes sobrantes de una versión anterior.
+    const existing = await readdir(itemDir).catch(() => [] as string[]);
+    const expected = new Set(files.map((file) => path.basename(file)));
+    let imagesChanged = existing.some((name) => !expected.has(name));
     for (const [index, relative] of files.entries()) {
       const bytes = images[index];
-      if (bytes === undefined) continue;
-      const target = path.join(options.outDir, relative);
-      if (!sameBytes(await readIfExists(target), bytes)) imagesChanged = true;
+      if (bytes && !sameBytes(await readIfExists(path.join(dir, relative)), bytes)) {
+        imagesChanged = true;
+      }
     }
-
     if (imagesChanged) {
-      await rm(serviceDir, { recursive: true, force: true });
-      await mkdir(serviceDir, { recursive: true });
+      await rm(itemDir, { recursive: true, force: true });
+      await mkdir(itemDir, { recursive: true });
       for (const [index, relative] of files.entries()) {
         const bytes = images[index];
-        if (bytes !== undefined) await writeFile(path.join(options.outDir, relative), bytes);
+        if (bytes) await writeFile(path.join(dir, relative), bytes);
       }
       changed = true;
     }
     imageCount += files.length;
-    entries.push(buildEntry(service, previous.get(service.slug), imagesChanged, options.today));
+    entries.push(spec.entry(item, previous.get(id), imagesChanged, options.today));
   }
 
-  // Elimina carpetas de servicios que ya no están publicados.
-  const keep = new Set(services.map((service) => service.slug));
-  for (const item of await readdir(options.outDir, { withFileTypes: true }).catch(() => [])) {
-    if (item.isDirectory() && !keep.has(item.name)) {
-      await rm(path.join(options.outDir, item.name), { recursive: true, force: true });
+  // Elimina carpetas de elementos que ya no están publicados.
+  const keep = new Set(spec.parsed.items.map((item) => spec.id(item)));
+  for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    if (entry.isDirectory() && !keep.has(entry.name)) {
+      await rm(path.join(dir, entry.name), { recursive: true, force: true });
       changed = true;
     }
   }
 
   const nextJson = `${JSON.stringify(entries, null, 2)}\n`;
   if (nextJson !== previousJson) {
-    await mkdir(options.outDir, { recursive: true });
+    await mkdir(dir, { recursive: true });
     await writeFile(jsonPath, nextJson);
     changed = true;
   }
+  return { changed, images: imageCount };
+}
 
-  return { warnings, rows, drafts, services: entries.length, images: imageCount, changed };
+export async function runSync(source: ContentSource, options: SyncOptions): Promise<SyncReport> {
+  const sheets = await source.readSheets(ALL_SHEETS);
+  const services: CollectionSpec<ServiceDraft, ServiceEntry> = {
+    name: 'servicios',
+    parsed: parseServices(sheets.get(SERVICES_SHEET) ?? [], sheets.get(PHOTOS_SHEET) ?? []),
+    id: (service) => service.slug,
+    images: serviceImages,
+    entry: buildServiceEntry,
+  };
+  const businesses: CollectionSpec<BusinessDraft, BusinessEntry> = {
+    name: 'negocios',
+    parsed: parseBusinesses(sheets.get(BUSINESSES_SHEET) ?? []),
+    id: (business) => business.slug,
+    images: businessImages,
+    entry: buildBusinessEntry,
+  };
+
+  const problems: Problem[] = [...services.parsed.problems, ...businesses.parsed.problems];
+  const notes = [...services.parsed.notes, ...businesses.parsed.notes];
+  const warnings: string[] = [];
+  for (const sheet of [PHOTOS_SHEET, SERVICES_SHEET]) {
+    if (!sheets.has(sheet)) problems.unshift({ message: `Falta la pestaña "${sheet}".` });
+  }
+  if (!sheets.has(BUSINESSES_SHEET)) {
+    warnings.push(`Crea la pestaña "${BUSINESSES_SHEET}" para publicar el directorio de negocios.`);
+  }
+  problems.push(...(await checkBusinessLinks(businesses.parsed.items, options.checkLink)));
+
+  // Descarga y convierte todo antes de tocar el disco: si algo falla, no queda a medias.
+  const rendered = new Map<string, Map<string, Uint8Array[]>>();
+  if (!problems.some(isBlocking)) {
+    for (const spec of [
+      {
+        name: services.name,
+        ...(await renderImages(services.parsed.items, services.id, services.images, source)),
+      },
+      {
+        name: businesses.name,
+        ...(await renderImages(businesses.parsed.items, businesses.id, businesses.images, source)),
+      },
+    ]) {
+      rendered.set(spec.name, spec.rendered);
+      problems.push(...spec.problems);
+    }
+  }
+
+  warnings.push(...(await writeReview(source, sheets, problems, notes, options.reviewedAt)));
+  if (problems.some(isBlocking)) throw new SyncError(problems, warnings);
+  warnings.push(...problems.map(formatProblem));
+
+  const servicesResult = await writeCollection(
+    services,
+    rendered.get(services.name) ?? new Map(),
+    options,
+  );
+  const businessesResult = await writeCollection(
+    businesses,
+    rendered.get(businesses.name) ?? new Map(),
+    options,
+  );
+  const report = (spec: { name: string; parsed: CollectionParse<unknown> }, images: number) => ({
+    name: spec.name,
+    rows: spec.parsed.rows,
+    drafts: spec.parsed.drafts,
+    published: spec.parsed.items.length,
+    images,
+  });
+  return {
+    warnings,
+    collections: [
+      report(services, servicesResult.images),
+      report(businesses, businessesResult.images),
+    ],
+    changed: servicesResult.changed || businessesResult.changed,
+  };
 }
 
 function nowInBogota(): { today: string; reviewedAt: string } {
@@ -257,6 +383,21 @@ function bulletList(items: readonly string[]): string {
   return items.map((item) => `- ${item}`).join('\n');
 }
 
+/** Comprobación real de un enlace externo: GET con redirecciones y límite de 15 s. */
+const fetchLinkChecker: LinkChecker = async (url) => {
+  try {
+    const response = await fetch(url, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(15_000),
+      headers: { 'User-Agent': 'desayunosorpresas.com sync (revisión de enlaces)' },
+    });
+    await response.body?.cancel();
+    return response.ok ? null : `respondió con el código ${response.status}`;
+  } catch {
+    return 'no se pudo conectar';
+  }
+};
+
 async function main(): Promise<void> {
   const credentials = process.env['GOOGLE_SERVICE_ACCOUNT_JSON'];
   const spreadsheetId = process.env['SPREADSHEET_ID'];
@@ -266,17 +407,24 @@ async function main(): Promise<void> {
   const account = parseServiceAccount(credentials);
   const token = await getAccessToken(account, SCOPES);
   const report = await runSync(createGoogleSource(spreadsheetId, token, account.clientEmail), {
-    outDir: DEFAULT_OUT_DIR,
+    contentDir: DEFAULT_CONTENT_DIR,
+    checkLink: fetchLinkChecker,
     ...nowInBogota(),
   });
-  const message =
-    `Filas leídas en "Servicios": ${report.rows} (${report.drafts} en borrador). ` +
-    `Publicados: ${report.services}, fotos: ${report.images}. ` +
-    (report.changed ? 'Hay cambios.' : 'Sin cambios.');
+  const lines = report.collections.map(
+    (c) =>
+      `${c.name}: ${c.rows} fila(s) (${c.drafts} en borrador), ${c.published} publicado(s), ${c.images} imagen(es).`,
+  );
+  const message = `${lines.join(' ')} ${report.changed ? 'Hay cambios.' : 'Sin cambios.'}`;
   console.log(message);
-  for (const warning of report.warnings) console.warn(`Aviso: ${warning}`);
+  if (report.warnings.length > 0) {
+    console.warn('Avisos (no bloquean):');
+    for (const warning of report.warnings) console.warn(`  - ${warning}`);
+  }
   const warnings =
-    report.warnings.length > 0 ? `\n\n**Avisos:**\n\n${bulletList(report.warnings)}` : '';
+    report.warnings.length > 0
+      ? `\n\n**Avisos (no bloquean):**\n\n${bulletList(report.warnings)}`
+      : '';
   await appendToFiles([process.env['GITHUB_STEP_SUMMARY']], `${message}${warnings}\n\n`);
 }
 
@@ -293,7 +441,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         : 'No se pudo sincronizar:';
     console.error(title);
     for (const problem of problems) console.error(`  - ${formatProblem(problem)}`);
-    for (const warning of warnings) console.warn(`Aviso: ${warning}`);
+    for (const warning of warnings) console.warn(`  - ${warning}`);
 
     // Resumen de la ejecución: lista completa.
     const all = bulletList(problems.map(formatProblem));
@@ -301,16 +449,19 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     await appendToFiles([process.env['GITHUB_STEP_SUMMARY']], `### ${title}\n\n${all}${notice}\n`);
 
     // Issue (público): los errores de filas se corrigen en la hoja; aquí solo se resumen.
-    const inRows = problems.filter((problem) => problem.row !== undefined).length;
-    const general = problems.filter((problem) => problem.row === undefined).map(formatProblem);
+    const blocking = problems.filter(isBlocking);
+    const inRows = blocking.filter((problem) => problem.row !== undefined).length;
+    const general = blocking.filter((problem) => problem.row === undefined).map(formatProblem);
+    const writeFailed = warnings.some((warning) => warning.startsWith('No se pudo escribir'));
+    const tabs = ALL_SHEETS.map((sheet) => `"${sheet}"`).join(', ');
     const lines = [
-      ...(inRows > 0 && warnings.length === 0
+      ...(inRows > 0 && !writeFailed
         ? [
-            `Hay **${inRows} error(es)** en filas de la hoja. Revisa las columnas **Errores a corregir** y **Detalle error** de las pestañas "${SERVICES_SHEET}" y "${PHOTOS_SHEET}".`,
+            `Hay **${inRows} error(es)** en filas de la hoja. Revisa las columnas **Errores a corregir** y **Detalle error** de las pestañas ${tabs}.`,
           ]
         : []),
       // Si no se pudo escribir en la hoja, la lista completa va en el issue.
-      ...(inRows > 0 && warnings.length > 0
+      ...(inRows > 0 && writeFailed
         ? ['No se pudo escribir la revisión en la hoja. Errores:', '', all]
         : []),
       ...(general.length > 0 ? ['', bulletList(general)] : []),
