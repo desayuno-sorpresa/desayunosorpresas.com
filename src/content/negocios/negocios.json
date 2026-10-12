@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": "1",
+    "name": "Alova",
+    "url": "https://alova.desayunosorpresas.com/",
+    "summary": "Regalos sorpresa en sabana norte Bogotá",
+    "city": "Sabana norte",
+    "image": "./1/01.webp",
+    "imageAlt": "Desayunos sorpresa con varias modalidades: niño, hombre, mujer y adulto mayor",
+    "featured": true,
+    "order": 1,
+    "status": "publicado",
+    "updatedAt": "2026-10-12"
+  }
+]
