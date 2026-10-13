@@ -53,6 +53,19 @@ describe('reviewTexts', () => {
 });
 
 describe('reviewAltTexts', () => {
+  it('ignora descripciones y títulos vacíos', () => {
+    expect(
+      reviewAltTexts(
+        [
+          { label: 'Descripción portada', origin: 'la portada', alt: '' },
+          { label: 'Descripción foto', origin: 'la foto 2', alt: ' ' },
+        ],
+        '',
+        'Resumen del servicio',
+      ),
+    ).toEqual([]);
+  });
+
   it('rechaza descripciones que repiten título o resumen', () => {
     expect(
       reviewAltTexts(

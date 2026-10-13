@@ -119,6 +119,17 @@ describe('parseBusinesses', () => {
     ]);
   });
 
+  it('con nombre y descripción de imagen vacíos no inventa "repite el título"', () => {
+    const empty = [...alova];
+    empty[0] = '';
+    empty[6] = '';
+    const errors = errorsOf([row(HEADERS), row(empty)]);
+    expect(errors.some((message) => message.includes('repite'))).toBe(false);
+    expect(errors).toContain(
+      'Negocios, fila 2: "Descripción imagen" debe describir la imagen (mínimo 5 caracteres).',
+    );
+  });
+
   it('ordena por "Orden" y luego por nombre', () => {
     const second = [...alova];
     second[0] = 'Bonita Mañana';

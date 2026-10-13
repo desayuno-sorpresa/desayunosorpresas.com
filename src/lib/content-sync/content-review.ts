@@ -107,13 +107,19 @@ export function reviewAltTexts(
   summary: string,
 ): AltProblem[] {
   const problems: AltProblem[] = [];
-  const forbidden = new Map([
-    [normalizeForReview(title), 'el título'],
-    [normalizeForReview(summary), 'el resumen'],
-  ]);
+  // Los textos vacíos no cuentan: una descripción vacía no "repite" un título vacío.
+  const forbidden = new Map(
+    (
+      [
+        [normalizeForReview(title), 'el título'],
+        [normalizeForReview(summary), 'el resumen'],
+      ] as const
+    ).filter(([text]) => text !== ''),
+  );
   const seen = new Map<string, string>();
   alts.forEach(({ label, origin, alt }, index) => {
     const normalized = normalizeForReview(alt);
+    if (normalized === '') return;
     const repeated = forbidden.get(normalized);
     if (repeated) {
       problems.push({
