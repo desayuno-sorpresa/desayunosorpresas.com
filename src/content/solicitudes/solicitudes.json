@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "id": "2026-10-17-fila-4",
+    "date": "2026-10-17",
+    "group": "publico",
+    "city": "Pereira",
+    "updatedAt": "2026-10-17"
+  },
+  {
+    "id": "2026-10-17-fila-2",
+    "date": "2026-10-17",
+    "group": "privado",
+    "city": "Cali",
+    "updatedAt": "2026-10-17"
+  }
+]
