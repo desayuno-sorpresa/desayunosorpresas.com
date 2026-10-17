@@ -1,8 +1,15 @@
 import { defineCollection } from 'astro:content';
 import { file } from 'astro/loaders';
 import { z } from 'astro/zod';
-import { BUSINESS_LIMITS as B, SERVICE_LIMITS as L, SLUG_PATTERN } from '@/lib/content-sync/limits';
+import {
+  BUSINESS_LIMITS as B,
+  REQUEST_LIMITS as R,
+  SERVICE_LIMITS as L,
+  SLUG_PATTERN,
+} from '@/lib/content-sync/limits';
 import { parseHttpsUrl } from '@/lib/content-sync/links';
+import { GROUP_IDS } from '@/lib/join-request';
+import { parseIsoDate } from '@/lib/recent-requests';
 
 /*
  * El JSON y las imágenes de cada colección los genera `pnpm sync:content`
@@ -70,4 +77,17 @@ const negocios = defineCollection({
     }),
 });
 
-export const collections = { servicios, negocios };
+// Solicitudes de ingreso anónimas (fecha, grupo y ciudad) para el aviso de actividad.
+const solicitudes = defineCollection({
+  loader: file(`${CONTENT_DIR}/solicitudes/solicitudes.json`, {
+    parser: listWithSlugIds('solicitudes'),
+  }),
+  schema: z.object({
+    date: z.string().refine((value) => parseIsoDate(value) !== null, 'Fecha YYYY-MM-DD.'),
+    group: z.enum(GROUP_IDS),
+    city: z.string().min(R.city.min).max(R.city.max),
+    updatedAt: z.coerce.date(),
+  }),
+});
+
+export const collections = { servicios, negocios, solicitudes };

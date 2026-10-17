@@ -7,13 +7,21 @@ interface Props {
   adminWhatsApp: string | null;
   conditionsHref: string;
   privacyHref: string;
+  /** Apps Script que guarda la solicitud en Google Sheets; `null` = no se guarda. */
+  saveEndpoint: string | null;
 }
 
-const { groups, adminWhatsApp, conditionsHref, privacyHref } = Astro.props;
+const { groups, adminWhatsApp, conditionsHref, privacyHref, saveEndpoint } = Astro.props;
 const enabled = adminWhatsApp !== null;
 ---
 
-<form class="join-form" data-join-form data-phone={adminWhatsApp ?? ''} novalidate>
+<form
+  class="join-form"
+  data-join-form
+  data-phone={adminWhatsApp ?? ''}
+  data-save-endpoint={saveEndpoint ?? ''}
+  novalidate
+>
   {!enabled && (
     <p class="notice" role="note">
       El formulario estará disponible muy pronto: falta configurar el número de WhatsApp del
@@ -160,6 +168,7 @@ const enabled = adminWhatsApp !== null;
   import {
     buildJoinRequestMessage,
     parseJoinRequest,
+    type JoinRequest,
     type JoinRequestErrors,
     type JoinRequestField,
     type JoinRequestInput,
@@ -228,8 +237,18 @@ const enabled = adminWhatsApp !== null;
     }
   }
 
+  /**
+   * Guarda la solicitud en la hoja sin esperar respuesta: `keepalive` deja que termine aunque
+   * se abra WhatsApp. Si falla, la solicitud llega igual por WhatsApp.
+   */
+  function saveRequest(endpoint: string, request: JoinRequest): void {
+    const body = new URLSearchParams({ ...request });
+    fetch(endpoint, { method: 'POST', mode: 'no-cors', keepalive: true, body }).catch(() => {});
+  }
+
   for (const form of document.querySelectorAll<HTMLFormElement>('[data-join-form]')) {
     const phone = form.dataset['phone'] ?? '';
+    const saveEndpoint = form.dataset['saveEndpoint'] ?? '';
     if (phone === '') continue;
 
     form.addEventListener('submit', (event) => {
@@ -244,6 +263,7 @@ const enabled = adminWhatsApp !== null;
         `[name="group"][value="${result.value.group}"]`,
       );
       const groupTitle = groupInput?.dataset['title'] ?? result.value.group;
+      if (saveEndpoint !== '') saveRequest(saveEndpoint, result.value);
       window.location.assign(
         buildWaMeUrl(phone, buildJoinRequestMessage(result.value, groupTitle)),
       );

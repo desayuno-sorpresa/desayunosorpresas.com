@@ -1,0 +1,23 @@
+[
+  {
+    "id": "2026-10-17-fila-4",
+    "date": "2026-10-17",
+    "group": "privado",
+    "city": "Medellín",
+    "updatedAt": "2026-10-17"
+  },
+  {
+    "id": "2026-10-16-fila-3",
+    "date": "2026-10-16",
+    "group": "publico",
+    "city": "Bogotá",
+    "updatedAt": "2026-10-17"
+  },
+  {
+    "id": "2026-09-01-fila-2",
+    "date": "2026-09-01",
+    "group": "privado",
+    "city": "Cali",
+    "updatedAt": "2026-10-17"
+  }
+]

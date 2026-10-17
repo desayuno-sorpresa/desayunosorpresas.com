@@ -4,6 +4,16 @@ export interface ReleaseInput {
   brandName: string | null;
   adminWhatsApp: string | null;
   provisional: { conditions: boolean; privacy: boolean };
+  joinRequests: { endpoint: string | null; privacyApproved: boolean };
+}
+
+function isAppsScriptUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname === 'script.google.com';
+  } catch {
+    return false;
+  }
 }
 
 /** Lista los datos que faltan para publicar en producción. Vacía = listo. */
@@ -20,5 +30,13 @@ export function findReleaseBlockers(config: ReleaseInput): string[] {
     blockers.push('Las condiciones de los grupos son provisionales.');
   if (config.provisional.privacy)
     blockers.push('La política de tratamiento de datos es provisional.');
+  if (config.joinRequests.endpoint !== null && !config.joinRequests.privacyApproved) {
+    blockers.push(
+      'El formulario guarda solicitudes en Google Sheets, pero el texto de privacidad que lo explica no está aprobado (siteConfig.joinRequests.privacyApproved).',
+    );
+  }
+  if (config.joinRequests.endpoint !== null && !isAppsScriptUrl(config.joinRequests.endpoint)) {
+    blockers.push('siteConfig.joinRequests.endpoint debe ser una URL https://script.google.com/….');
+  }
   return blockers;
 }

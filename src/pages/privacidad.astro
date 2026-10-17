@@ -9,7 +9,8 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 >
   <section class="section container prose">
     <h1>Tratamiento de datos personales</h1>
-    {siteConfig.provisional.privacy && (
+    {(siteConfig.provisional.privacy ||
+      (siteConfig.joinRequests.endpoint !== null && !siteConfig.joinRequests.privacyApproved)) && (
       <p class="notice" role="note">
         Texto provisional pendiente de revisión legal y de los datos del responsable del
         tratamiento.
@@ -22,10 +23,26 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
       teléfono.
     </p>
     <h2>Dónde se guardan</h2>
-    <p>
-      Este sitio web no guarda ni envía tus datos a ningún servidor. El formulario solo prepara un
-      mensaje que tú decides enviar por WhatsApp al administrador.
-    </p>
+    {siteConfig.joinRequests.endpoint === null ? (
+      <p>
+        Este sitio web no guarda ni envía tus datos a ningún servidor. El formulario solo prepara un
+        mensaje que tú decides enviar por WhatsApp al administrador.
+      </p>
+    ) : (
+      <>
+        <p>
+          Al enviar el formulario, tus datos se guardan en una hoja de cálculo privada de Google
+          Sheets a la que solo accede el administrador, y se prepara un mensaje que tú decides
+          enviar por WhatsApp.
+        </p>
+        <p>
+          En el sitio puede aparecer un aviso anónimo con la ciudad, el grupo y el día de la
+          solicitud (por ejemplo, «Un negocio de Cali solicitó unirse al grupo privado de
+          negocios»), solo si el administrador lo aprueba. Nunca se publican tu nombre, el de tu
+          negocio, tu teléfono ni tus redes.
+        </p>
+      </>
+    )}
     <h2>Para qué se usan</h2>
     <p>
       Únicamente para verificar las condiciones de ingreso al grupo elegido y responder a tu

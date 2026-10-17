@@ -13,3 +13,11 @@ export const BUSINESS_LIMITS = {
   summary: { min: 10, max: 160 },
   city: { min: 2, max: 60 },
 } as const;
+
+export const REQUEST_LIMITS = {
+  city: { min: 2, max: 60 },
+  /** Días que una solicitud sigue visible en el aviso. */
+  days: 14,
+  /** Máximo de solicitudes publicadas. */
+  max: 20,
+} as const;

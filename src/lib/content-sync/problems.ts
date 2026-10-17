@@ -1,8 +1,15 @@
 export const SERVICES_SHEET = 'Servicios';
 export const PHOTOS_SHEET = 'Fotos';
 export const BUSINESSES_SHEET = 'Negocios';
-export type SheetName = typeof SERVICES_SHEET | typeof PHOTOS_SHEET | typeof BUSINESSES_SHEET;
-export const ALL_SHEETS: readonly SheetName[] = [SERVICES_SHEET, PHOTOS_SHEET, BUSINESSES_SHEET];
+export const REQUESTS_SHEET = 'Solicitudes';
+export type SheetName =
+  typeof SERVICES_SHEET | typeof PHOTOS_SHEET | typeof BUSINESSES_SHEET | typeof REQUESTS_SHEET;
+export const ALL_SHEETS: readonly SheetName[] = [
+  SERVICES_SHEET,
+  PHOTOS_SHEET,
+  BUSINESSES_SHEET,
+  REQUESTS_SHEET,
+];
 
 /**
  * Problema detectado en la hoja. Con `sheet` y `row` se escribe en esa fila;

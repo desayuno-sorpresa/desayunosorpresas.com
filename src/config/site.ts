@@ -30,6 +30,15 @@ export interface SiteConfig {
   referralSiteName: string;
   nav: readonly NavItem[];
   groups: readonly WhatsAppGroup[];
+  joinRequests: {
+    /**
+     * URL del Apps Script que guarda cada solicitud en la pestaña "Solicitudes".
+     * `null` = el formulario no guarda nada (solo abre WhatsApp).
+     */
+    endpoint: string | null;
+    /** El texto de privacidad que menciona el guardado en Google Sheets está aprobado. */
+    privacyApproved: boolean;
+  };
   /** Textos marcados como provisionales; bloquean la publicación (`check:release`). */
   provisional: { conditions: boolean; privacy: boolean };
 }
@@ -76,5 +85,10 @@ export const siteConfig: SiteConfig = {
       ],
     },
   ],
+  joinRequests: {
+    endpoint:
+      'https://script.google.com/macros/s/AKfycbyaFOsJ3Qgfv7TnLvBa3bGwm0iJvxkaDj1NDbH_vPetRXcCcYMeDK4gm9K4cRPFvZiw/exec',
+    privacyApproved: true,
+  },
   provisional: { conditions: false, privacy: false },
 };

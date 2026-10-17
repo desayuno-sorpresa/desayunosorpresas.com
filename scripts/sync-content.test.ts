@@ -154,6 +154,7 @@ describe('runSync', () => {
       collections: [
         { name: 'servicios', rows: 1, drafts: 0, published: 1, images: 2 },
         { name: 'negocios', rows: 1, drafts: 0, published: 1, images: 1 },
+        { name: 'solicitudes', rows: 0, drafts: 0, published: 0, images: 0 },
       ],
       changed: true,
     });
@@ -214,11 +215,47 @@ describe('runSync', () => {
     const sheets = allSheets();
     sheets.delete('Negocios');
     const report = await runSync(fakeSource(sheets, await validFiles()), options);
-    expect(report.collections.map((c) => c.published)).toEqual([1, 0]);
+    expect(report.collections.map((c) => c.published)).toEqual([1, 0, 0]);
     expect(report.warnings).toEqual([
       'Crea la pestaña "Negocios" para publicar el directorio de negocios.',
     ]);
     expect(await readJson(contentDir, 'negocios')).toEqual([]);
+  });
+
+  it('publica solo fecha, grupo y ciudad de las solicitudes marcadas', async () => {
+    const sheets = allSheets();
+    sheets.set('Solicitudes', [
+      [
+        'Fecha',
+        'Grupo',
+        'Nombre',
+        'Negocio',
+        'Ciudad',
+        'Publicar',
+        'Errores a corregir',
+        'Detalle error',
+      ].map((text) => ({ text })),
+      ['2026-10-11 09:00', 'Privado', 'Ana Pérez', 'Dulce Amanecer', 'Cali', 'Sí'].map((text) => ({
+        text,
+      })),
+      ['2026-10-11 10:00', 'Público', 'Luis Gómez', '', 'Pasto', ''].map((text) => ({ text })),
+    ]);
+    const source = fakeSource(sheets, await validFiles());
+    const report = await runSync(source, options);
+    expect(report.collections[2]).toMatchObject({ rows: 2, drafts: 1, published: 1 });
+    expect(await readJson(contentDir, 'solicitudes')).toEqual([
+      {
+        id: '2026-10-11-fila-2',
+        date: '2026-10-11',
+        group: 'privado',
+        city: 'Cali',
+        updatedAt: options.today,
+      },
+    ]);
+    expect(source.written.get('Solicitudes')?.[0]?.values).toEqual([
+      `✅ Sin errores · revisado ${AT}`,
+      expect.stringContaining('No se publica'),
+    ]);
   });
 
   it('elimina elementos que pasan a borrador y lo anota en la hoja', async () => {

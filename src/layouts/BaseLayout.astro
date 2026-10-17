@@ -1,9 +1,12 @@
 ---
+import { getCollection } from 'astro:content';
+import RecentRequestsToast from '@/components/RecentRequestsToast.astro';
 import SeoHead from '@/components/SeoHead.astro';
 import SiteFooter from '@/components/SiteFooter.astro';
 import SiteHeader from '@/components/SiteHeader.astro';
 import { includeDrafts } from '@/config/build';
 import { siteConfig } from '@/config/site';
+import { REQUEST_LIMITS } from '@/lib/content-sync/limits';
 import { buildWaMeUrl } from '@/lib/whatsapp';
 import '@/styles/global.css';
 
@@ -19,6 +22,9 @@ const siteName = siteConfig.brandName ?? siteConfig.name;
 const whatsApp = siteConfig.adminWhatsApp
   ? { label: siteConfig.adminWhatsApp, href: buildWaMeUrl(siteConfig.adminWhatsApp) }
   : null;
+const requests = (await getCollection('solicitudes')).map((entry) => entry.data);
+const groupTitles = { publico: '', privado: '' };
+for (const group of siteConfig.groups) groupTitles[group.id] = group.title;
 ---
 
 <!doctype html>
@@ -49,6 +55,11 @@ const whatsApp = siteConfig.adminWhatsApp
     <main id="contenido" tabindex="-1">
       <slot />
     </main>
+    <RecentRequestsToast
+      requests={requests}
+      groupTitles={groupTitles}
+      maxDays={REQUEST_LIMITS.days}
+    />
     <SiteFooter siteName={siteName} contactEmail={siteConfig.contactEmail} whatsApp={whatsApp} />
   </body>
 </html>

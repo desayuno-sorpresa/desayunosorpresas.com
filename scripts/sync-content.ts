@@ -1,4 +1,4 @@
-// Sincroniza el contenido (servicios y negocios) desde Google Sheets + Drive hacia src/content/.
+// Sincroniza el contenido (servicios, negocios y solicitudes) desde Google Sheets + Drive hacia src/content/.
 // Uso: GOOGLE_SERVICE_ACCOUNT_JSON='…' SPREADSHEET_ID='…' pnpm sync:content
 import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -29,11 +29,18 @@ import {
   formatProblem,
   isBlocking,
   PHOTOS_SHEET,
+  REQUESTS_SHEET,
   rowProblem,
   rowWarning,
   SERVICES_SHEET,
   type Problem,
 } from '../src/lib/content-sync/problems.ts';
+import {
+  buildRequestEntry,
+  parseRequests,
+  type RequestDraft,
+  type RequestEntry,
+} from '../src/lib/content-sync/requests.ts';
 import { parseServices, type ServiceDraft } from '../src/lib/content-sync/services.ts';
 import type { SheetGrid } from '../src/lib/content-sync/sheet.ts';
 import { buildStatusWrites } from '../src/lib/content-sync/status.ts';
@@ -47,7 +54,7 @@ const SUPPORTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image
 export type LinkChecker = (url: string) => Promise<string | null>;
 
 export interface SyncOptions {
-  /** Carpeta con una subcarpeta por colección (`servicios/`, `negocios/`). */
+  /** Carpeta con una subcarpeta por colección (`servicios/`, `negocios/`, `solicitudes/`). */
   contentDir: string;
   /** Fecha YYYY-MM-DD para elementos nuevos o modificados. */
   today: string;
@@ -298,9 +305,21 @@ export async function runSync(source: ContentSource, options: SyncOptions): Prom
     images: businessImages,
     entry: buildBusinessEntry,
   };
+  // Pestaña opcional que llena el Apps Script del formulario; sin imágenes.
+  const requests: CollectionSpec<RequestDraft, RequestEntry> = {
+    name: 'solicitudes',
+    parsed: parseRequests(sheets.get(REQUESTS_SHEET) ?? [], options.today),
+    id: (request) => request.id,
+    images: () => [],
+    entry: buildRequestEntry,
+  };
 
-  const problems: Problem[] = [...services.parsed.problems, ...businesses.parsed.problems];
-  const notes = [...services.parsed.notes, ...businesses.parsed.notes];
+  const problems: Problem[] = [
+    ...services.parsed.problems,
+    ...businesses.parsed.problems,
+    ...requests.parsed.problems,
+  ];
+  const notes = [...services.parsed.notes, ...businesses.parsed.notes, ...requests.parsed.notes];
   const warnings: string[] = [];
   for (const sheet of [PHOTOS_SHEET, SERVICES_SHEET]) {
     if (!sheets.has(sheet)) problems.unshift({ message: `Falta la pestaña "${sheet}".` });
@@ -342,6 +361,7 @@ export async function runSync(source: ContentSource, options: SyncOptions): Prom
     rendered.get(businesses.name) ?? new Map(),
     options,
   );
+  const requestsResult = await writeCollection(requests, new Map(), options);
   const report = (spec: { name: string; parsed: CollectionParse<unknown> }, images: number) => ({
     name: spec.name,
     rows: spec.parsed.rows,
@@ -354,8 +374,9 @@ export async function runSync(source: ContentSource, options: SyncOptions): Prom
     collections: [
       report(services, servicesResult.images),
       report(businesses, businessesResult.images),
+      report(requests, requestsResult.images),
     ],
-    changed: servicesResult.changed || businessesResult.changed,
+    changed: servicesResult.changed || businessesResult.changed || requestsResult.changed,
   };
 }
 

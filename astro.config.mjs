@@ -1,6 +1,12 @@
 // @ts-check
 import sitemap from '@astrojs/sitemap';
 import { defineConfig } from 'astro/config';
+import { siteConfig } from './src/config/site.ts';
+
+// Orígenes del Apps Script que guarda solicitudes (responde con una redirección a googleusercontent).
+const saveOrigins = siteConfig.joinRequests.endpoint
+  ? ['https://script.google.com', 'https://script.googleusercontent.com']
+  : [];
 
 /*
  * Dominio propio en GitHub Pages: base '/'.
@@ -21,7 +27,7 @@ export default defineConfig({
         "default-src 'self'",
         "img-src 'self' data:",
         "font-src 'self'",
-        "connect-src 'self'",
+        `connect-src ${["'self'", ...saveOrigins].join(' ')}`,
         "base-uri 'self'",
         "form-action 'self' https://wa.me",
         "object-src 'none'",
