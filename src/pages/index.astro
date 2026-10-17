@@ -1,9 +1,11 @@
 ---
 import { getCollection } from 'astro:content';
+import { Image } from 'astro:assets';
 import BusinessCard from '@/components/BusinessCard.astro';
 import Carousel from '@/components/Carousel.astro';
 import GroupCard from '@/components/GroupCard.astro';
 import JoinRequestForm from '@/components/JoinRequestForm.astro';
+import { includeDrafts } from '@/config/build';
 import { siteConfig } from '@/config/site';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { visibleItems } from '@/lib/publishing';
@@ -13,6 +15,18 @@ const featured = visibleItems(
   (await getCollection('negocios')).map((entry) => ({ id: entry.id, ...entry.data })),
   false,
 ).filter((business) => business.featured);
+
+// La portada usa la imagen del primer servicio visible; sin servicios, el hero es solo texto.
+const heroService = visibleItems(
+  (await getCollection('servicios')).map((entry) => ({ id: entry.id, ...entry.data })),
+  includeDrafts,
+)[0];
+
+const trustPoints = [
+  { value: '2', label: 'grupos de WhatsApp: uno con clientes y otro solo para negocios' },
+  { value: '100 %', label: 'de los ingresos los aprueba un administrador, uno a uno' },
+  { value: '0', label: 'enlaces de invitación publicados en el sitio' },
+] as const;
 
 const conditionsHref = withBase('condiciones/');
 // Solo datos visibles en la página (pie: marca, correo y WhatsApp).
@@ -33,18 +47,47 @@ const jsonLd = siteConfig.brandName
   description={siteConfig.description}
   {...(jsonLd ? { jsonLd } : {})}
 >
-  <section class="section container">
-    <h1>Servicios y comunidad para negocios de desayunos sorpresa</h1>
-    <p class="lead">
-      Ofrecemos servicios para pequeños y medianos negocios de desayunos sorpresa y dos grupos de
-      WhatsApp: uno para conectar con clientes y otro solo para negocios.
-    </p>
-    <p class="hero-actions">
-      <a class="button button--whatsapp" href="#solicitud">
-        Solicitar ingreso a un grupo
-      </a>
-      <a href={withBase('servicios/')}>Ver servicios</a>
-    </p>
+  <section class="hero">
+    <div class="container hero__inner">
+      <div class="hero__text">
+        <p class="eyebrow">Para negocios de desayunos sorpresa</p>
+        <h1>
+          Servicios y comunidad para negocios de <em>desayunos sorpresa</em>
+        </h1>
+        <p class="lead">
+          Ofrecemos servicios para pequeños y medianos negocios y dos grupos de WhatsApp: uno para
+          conectar con clientes y otro solo para negocios.
+        </p>
+        <p class="hero-actions">
+          <a class="button" href="#solicitud">
+            Solicitar ingreso a un grupo
+          </a>
+          <a href={withBase('servicios/')}>Ver servicios</a>
+        </p>
+      </div>
+      {heroService && (
+        <Image
+          class="hero__image"
+          src={heroService.cover}
+          alt={heroService.coverAlt}
+          widths={[480, 800, 1000]}
+          sizes="(min-width: 60rem) 34rem, 100vw"
+          loading="eager"
+          fetchpriority="high"
+        />
+      )}
+    </div>
+  </section>
+
+  <section class="trust" aria-label="Cómo funciona la comunidad">
+    <ul class="container trust__list">
+      {trustPoints.map((point) => (
+        <li>
+          <strong>{point.value}</strong>
+          <span>{point.label}</span>
+        </li>
+      ))}
+    </ul>
   </section>
 
   {featured.length > 0 && (
@@ -111,6 +154,75 @@ const jsonLd = siteConfig.brandName
     justify-content: space-between;
     gap: var(--space-1) var(--space-2);
   }
+  .hero {
+    background: linear-gradient(180deg, var(--color-surface), var(--color-bg));
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .hero__inner {
+    display: grid;
+    gap: var(--space-3);
+    align-items: center;
+    padding-block: var(--space-4);
+  }
+
+  .hero__image {
+    width: 100%;
+    border-radius: var(--radius);
+    box-shadow: 0 1rem 2.5rem rgb(104 36 130 / 0.18);
+  }
+
+  .eyebrow {
+    margin: 0 0 var(--space-1);
+    color: var(--color-primary);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .trust {
+    background: var(--color-primary);
+    color: var(--color-primary-text);
+  }
+
+  .trust__list {
+    display: grid;
+    gap: var(--space-2);
+    margin-block: 0;
+    padding-block: var(--space-3);
+    list-style: none;
+  }
+
+  .trust__list li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .trust__list strong {
+    min-width: 4.5rem;
+    font-family: var(--font-serif);
+    font-size: 2rem;
+    line-height: 1;
+    text-align: center;
+  }
+
+  .trust__list span {
+    font-size: 0.9375rem;
+  }
+
+  @media (min-width: 48rem) {
+    .hero__inner {
+      grid-template-columns: 1.1fr 1fr;
+      gap: var(--space-4);
+    }
+
+    .trust__list {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
   .hero-actions {
     display: flex;
     flex-wrap: wrap;

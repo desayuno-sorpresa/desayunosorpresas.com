@@ -18,6 +18,8 @@ test.describe('directorio de negocios', () => {
 
   test('el menú incluye Negocios y marca la página actual', async ({ page }) => {
     await page.goto('negocios/');
+    const toggle = page.getByRole('button', { name: 'Menú' });
+    if (await toggle.isVisible()) await toggle.click();
     await expect(
       page.getByRole('navigation', { name: 'Principal' }).getByRole('link', { name: 'Negocios' }),
     ).toHaveAttribute('aria-current', 'page');

@@ -40,7 +40,12 @@ const whatsApp = siteConfig.adminWhatsApp
         Vista previa: se muestran borradores. No publicar este build.
       </p>
     )}
-    <SiteHeader siteName={siteName} nav={siteConfig.nav} />
+    <SiteHeader
+      siteName={siteName}
+      nav={siteConfig.nav}
+      announcement="Grupos de WhatsApp para negocios de desayunos sorpresa y sus clientes."
+      cta={{ label: 'Solicitar ingreso', path: '#solicitud' }}
+    />
     <main id="contenido" tabindex="-1">
       <slot />
     </main>
